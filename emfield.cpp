@@ -5,13 +5,20 @@
 #include <vector>
 #include <algorithm>
 #include <functional>
+#include <exception>
 
 //Parallel Computation tryout stuff
+#ifndef N_DEBUG
+#define BOOST_COMPUTE_DEBUG_KERNEL_COMPILATION
+#endif
+
 #include <boost/compute/algorithm/transform.hpp>
 #include <boost/compute/container/vector.hpp>
 #include <boost/compute/functional/math.hpp>
 #include <boost/compute/core.hpp>
 #include <boost/compute/functional/bind.hpp>
+#include <boost/compute/utility/source.hpp>
+#include <boost/compute/command_queue.hpp>
 namespace compute = boost::compute;
 
 
@@ -23,288 +30,359 @@ Vec4 operator*(Vec4 a, double d) {
 Vec4 operator+(Vec4 a, Vec4 b) {
 	return Vec4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 }
-struct CollideExp {
-	Vec2 val;
-	CollideExp(Vec2 v):val(v){}
-};
+
+
 constexpr float k = 10000.0f;
 constexpr float unitR = 10;
-struct Charge {
-	Vec2 pos = Vec2(0,0);
-	float charge = 1;
-	const float k = ::k;
-	const float unitR = ::unitR;
-	Vec2 vel = Vec2(0, 0);
-	Vec2 getStrength(Vec2 point)const {
-		Vec2 r = point - pos;
-		if (r.Length() == 0)
-			throw CollideExp(Vec2(0, 0));
-		Vec2 dir = r.Normalize();
-		if (r.Length() < unitR * abs(charge)) {
-			throw CollideExp(dir * charge * r.Length() * k / pow((unitR * abs(charge)), 3));
-		}
-		else {
-				return dir * charge * k / (r.Length() * r.Length());
-		}
-	}
-	float getPot(Vec2 point)const {
-		Vec2 r = point - pos;
-		if (r.Length() == 0)
-			return 0;
-		if (r.Length() < unitR * abs(charge)) {
-			return charge * k / (unitR * abs(charge));
-		}
-		else {
-				return  charge * k / (r.Length());
-		}
-	}
-};
+
+
+
 //Parallel stuff
 
-struct PointPot {
-	float x;
-	float y;
-	unsigned char r;
-	unsigned char g;
-	unsigned char b;
-	unsigned char a;
 
+
+struct Point {
+	
+	cl_float x;
+	cl_float y;
 };
-BOOST_COMPUTE_ADAPT_STRUCT(PointPot, PointPot, (x, y, r, g, b, a));
+
+struct Charge {
+	cl_float q;
+	Point pos;
+	Point vel;
+};
+
+struct MyColor {
+	
+	cl_uchar r;
+	cl_uchar g;
+	cl_uchar b;
+	cl_uchar a;
+};
+BOOST_COMPUTE_ADAPT_STRUCT(Point, Point, (x, y));
+BOOST_COMPUTE_ADAPT_STRUCT(Charge, Charge, (q, pos, vel));
+BOOST_COMPUTE_ADAPT_STRUCT(MyColor, MyColor, (r,g,b,a));
+
 
 int emfield() {
 
-	InitWindow(900, 900, "EM Simulation");
+	if ((sizeof(Point) != (sizeof(Point::x) + sizeof(Point::y))) ||
+		(sizeof(MyColor) != (sizeof(MyColor::r) + sizeof(MyColor::g) + sizeof(MyColor::b) + sizeof(MyColor::a))) ||
+		(sizeof(Charge) != (sizeof(Charge::q) + sizeof(Charge::pos) + sizeof(Charge::vel))))
+		return -1;
+
+	constexpr size_t width = 900;
+	constexpr size_t height = 900;
+	const cl_int clWid = width;
+	const cl_int clHei = height;
+
+	InitWindow(width, height, "EM Simulation");
 	SetTargetFPS(60);
 
-	const unsigned number = 3;
-	const float timeFac = 2.0f;
-	std::array<Charge, number> charges;
+	constexpr size_t NumofCharges = 50;
+	const cl_int nCharges = NumofCharges;
+	std::array<Charge, NumofCharges> charges;
 
-	for (int i = 0; i < number; i++) {
-		charges[i].charge = GetRandomValue(-10, 10) / 10.0f;/*
-		charges[i].charge = GetRandomValue(-1, 0);
-		if (charges[i].charge == 0)
-			charges[i].charge = 1;*/
-		charges[i].pos.x = GetRandomValue(0, 900);
-		charges[i].pos.y = GetRandomValue(0, 900);
-		charges[i].vel.x = GetRandomValue(0, 900)/300.0f;
-		charges[i].vel.y = GetRandomValue(0, 900)/300.0f;
+	for (auto& chr : charges) {
+		chr.q = GetRandomValue(-10, 10)/10.0;
+		chr.pos.x = GetRandomValue(0, width);
+		chr.pos.y = GetRandomValue(0, height);
+		chr.vel.x = GetRandomValue(-100, 100) / 50.0;
+		chr.vel.y = GetRandomValue(-100, 100) / 50.0;
 	}
-	charges[0].charge = 1;
-	charges[1].charge = -1;
 
+	constexpr float k = 10000;
+	constexpr float unitRadius = 10;
+	constexpr float maxPot = -500;
 
-	std::array<Vec2, number> fields;
-	bool collide = false;
-	auto updateField = [&]() {
-		
-		for (int i = 0; i < number; i++) {
-			fields.at(i) = Vec2(0, 0);
-			for (int j = 0; j < number; j++) {
-				if (j == i)
-					continue;
-				fields.at(i) += charges.at(j).getStrength(charges.at(i).pos);
-			}
+	float constants[3];
+	constants[0] = k;
+	constants[1] = unitRadius;
+	constants[2] = maxPot;
+
+	std::vector<MyColor> board;
+	std::vector<Point> points;
+	
+
+	board.resize(width * height);
+	points.resize(width * height);
+
+	for (size_t y = 0; y < height; ++y) {
+		for (size_t x = 0; x < width; ++x) {
+			board[y * width + x].r = 255;
+			board[y * width + x].g = 0;
+			board[y * width + x].b = 0;
+			board[y * width + x].a = 255;
+
+			points[y * width + x].x = x;
+			points[y * width + x].y = y;
 		}
-	};
-	auto updatePos = [&]() {
-		for (int i = 0; i < number; i++) {
-			float tempFac = timeFac * GetFrameTime();
+	}
 
 
-			//charges.at(i).pos += charges.at(i).vel*timeFac;
-			//charges.at(i).vel += fields.at(i) * charges.at(i).charge *  timeFac;
-
-			charges.at(i).pos += charges.at(i).vel*GetFrameTime()*timeFac;
-			charges.at(i).vel += fields.at(i) * charges.at(i).charge * GetFrameTime() * timeFac;
-		}
-	};
-	float maxPot = -100;
-	raylib::Color* board = new raylib::Color[900 * 900];
-	auto getCol = [&](int i, int j)->raylib::Color& {return board[i * 900 + j]; };
-
-	//parallel stuff tryout
-
-	// get default device and setup context
+	//Initialize boost::compute
 	compute::device device = compute::system::default_device();
 	compute::context context(device);
 	compute::command_queue queue(context, device);
 
-	//Device data
-	PointPot* points = new PointPot[900 * 900];
-	auto getPoint = [&](int x, int y)->PointPot& {return points[y * 900 + x]; };
 
-	for (int x = 0; x < 900; x++) {
-		for (int y = 0; y < 900; y++) {
-			getPoint(x, y).x = x;
-			getPoint(x, y).y = y;
-			getPoint(x, y).r = 0;
-			getPoint(x, y).g = 0;
-			getPoint(x, y).b = 0;
-			getPoint(x, y).a = 0;
+	const char device_codes[] = BOOST_COMPUTE_STRINGIZE_SOURCE(
+
+	typedef struct {
+
+		float x;
+		float y;
+	} Point;\n
+
+	typedef struct {
+		float q;
+		Point pos;
+		Point vel;
+	} Charge;\n
+
+	typedef struct  {
+
+		unsigned char r;
+		unsigned char g;
+		unsigned char b;
+		unsigned char a;
+	}MyColor;\n
+
+	float my_abs(float num) {
+		return (num > 0) ? num : -num;
+	}\n
+
+	kernel void calc_pot(global Point* points, global Charge* charges,global float* results, global float* constants,int nCharges) {
+		\n
+		size_t index = get_global_id(0);
+		results[index] = 0;
+		\n
+			for (size_t i = 0; i < nCharges; ++i) {
+			\n
+			float r = sqrt((points[index].x - charges[i].pos.x) * (points[index].x - charges[i].pos.x) +
+				(points[index].y - charges[i].pos.y) * (points[index].y - charges[i].pos.y));
+			\n
+			if (r < constants[1] * my_abs(charges[i].q)) {
+				results[index] += charges[i].q * constants[0] / (constants[1] * my_abs(charges[i].q));
+			}
+			\n
+			else {
+				results[index] += charges[i].q * constants[0] / r;
+			}
+			\n
+		}
+	}\n
+	kernel void calc_elec_field(global Point* points, global Charge* charges,global Point* elec_field, global float* constants,int nCharges) {
+		\n
+		size_t index = get_global_id(0);
+		elec_field[index].x = 0;
+		elec_field[index].y = 0;
+		\n
+			for (size_t i = 0; i < nCharges; ++i) {
+			\n
+			Point vr ;
+			vr.x = points[index].x - charges[i].pos.x;
+			vr.y = points[index].y - charges[i].pos.y;
+
+			float r = sqrt(vr.x*vr.x+vr.y*vr.y);
+			\n
+			if(r == 0){
+			}
+			if (r < constants[1] * my_abs(charges[i].q)) {
+				float mag = charges[i].q * constants[0] / (r * r * constants[1] * my_abs(charges[i].q));
+				elec_field[index].x += mag * vr.x;
+				elec_field[index].y += mag * vr.y;
+			}
+			\n
+			else {
+				float mag = charges[i].q * constants[0] / (r * r * r);
+				elec_field[index].x += mag * vr.x;
+				elec_field[index].y += mag * vr.y;
+			}
+			\n
+		}
+	}\n
+
+	kernel void update_pos_vel(global Charge* charges, global Point* elec_field,int maxWidth, int maxHeight){
+		size_t index = get_global_id(0);
+		int x = (int)(charges[index].pos.x);
+		int y = (int)(charges[index].pos.y);
+		if (x >= 0 && x < maxWidth && y >= 0 && y < maxHeight) {
+			charges[index].pos.x += charges[index].vel.x;
+			charges[index].pos.y += charges[index].vel.y;
+			charges[index].vel.x += elec_field[y * maxWidth + x].x;
+			charges[index].vel.y += elec_field[y * maxWidth + x].y;
 		}
 	}
 
-	//Ends with assigning value of q
-	std::string part1 = "PointPot calculate_pot(PointPot pp) {float q = ";
-	//Ends with assigning value of qx
-	std::string part2 = " ; float qx = ";
-	//Ends with assigning value of qy
-	std::string part3 = " ; float qy = ";
-	//Ends the function
-	std::string part4 = " ; float k = "+std::to_string(k)+";float unitR = "+std::to_string(unitR) + "; PointPot p = pp;\
-double r = sqrt((p.x - qx) * (p.x - qx) + (p.y - qy) * (p.y - qy));\
-																   \
-	const float maxPot = -100;								   \
-	float pot = 0;												   \
-	if (r < unitR * ((q>0)?q:-q)) {								   \
-		pot = q * k / (unitR * ((q>0)?q:-q));				   \
-	}															   \
-	else {														   \
-		pot = q * k / (r);									   \
-	}															   \
-	float fac = pot / maxPot;									   \
-	if (fac > 1)												   \
-		fac = 1;												   \
-	if (fac < -1)												   \
-		fac = -1;												   \
-	fac = (fac + 1) / 2;										   \
-	p.r = 0 * fac + 230 * (1 - fac);							   \
-	p.g = 121 * fac + 41 * (1 - fac);							   \
-	p.b = 241 * fac + 55 * (1 - fac);							   \
-	p.a = 255 * fac + 255 * (1 - fac);							   \
-	return p;													   \
-}";
-
-	// create a vector on the device
-	compute::vector<PointPot> device_vector(900*900, context);
+	kernel void calc_col(global float* pots, global MyColor* results, global float* constants) {
+		size_t index = get_global_id(0);
+		float fac = pots[index] / constants[2];
+		if (fac > 1)
+			fac = 1;
+		if (fac < -1)
+			fac = -1;
+		fac = (fac + 1) / 2;
+		MyColor col;
+		col.r = 0 * fac + 255 * (1 - fac);
+		col.g = 0 * fac + 255 * (1 - fac);
+		col.b = 255 * fac + 0 * (1 - fac);
+		col.a = 255;
+		results[index] = col;
+	}\n
 
 
-	// transfer data from the host to the device
-	compute::copy(
-		points, points + 900 * 900, device_vector.begin(), queue
+
 	);
 
+
+	compute::program device_prog = compute::program::build_with_source(device_codes, context);
+
+	compute::kernel pot_kernel(device_prog, "calc_pot");
+	compute::kernel col_kernel(device_prog, "calc_col");
+	compute::kernel elec_field_kernel(device_prog, "calc_elec_field");
+	compute::kernel pos_kernel(device_prog, "update_pos_vel");
+
+	compute::vector<Point> device_points(width* height, context);
+	compute::vector<MyColor> device_board(width* height, context);
+	compute::vector<Charge> device_charges(nCharges, context);
+	compute::vector<float> device_pots(width* height, context);
+	compute::vector<float> device_consts(sizeof(constants) / sizeof(constants[0]), context);
+	compute::vector<Point> device_elec_field(width* height, context);
+
+	auto time_s = GetTime();
+
+	compute::copy(charges.begin(), charges.end(), device_charges.begin(), queue);
+	compute::copy(points.begin(), points.end(), device_points.begin(), queue);
+	compute::copy(board.begin(), board.end(), device_board.begin(), queue);
+	compute::copy(constants, constants + sizeof(constants) / sizeof(constants[0]), device_consts.begin(), queue);
+
+	pot_kernel.set_arg(0, device_points.get_buffer());
+	pot_kernel.set_arg(1, device_charges.get_buffer());
+	pot_kernel.set_arg(2, device_pots.get_buffer());
+	pot_kernel.set_arg(3, device_consts.get_buffer());
+	pot_kernel.set_arg(4, sizeof(nCharges), &nCharges);
+
+
+	col_kernel.set_arg(0, device_pots.get_buffer());
+	col_kernel.set_arg(1, device_board.get_buffer());
+	col_kernel.set_arg(2, device_consts.get_buffer());
+
+	elec_field_kernel.set_arg(0, device_points.get_buffer());
+	elec_field_kernel.set_arg(1, device_charges.get_buffer());
+	elec_field_kernel.set_arg(2, device_elec_field.get_buffer());
+	elec_field_kernel.set_arg(3, device_consts.get_buffer());
+	elec_field_kernel.set_arg(4, sizeof(nCharges), &nCharges);
+
+	pos_kernel.set_arg(0, device_charges.get_buffer());
+	pos_kernel.set_arg(1, device_elec_field.get_buffer());
+	pos_kernel.set_arg(2, clWid);
+	pos_kernel.set_arg(3, clHei);
+
+	std::cout << "Time spent = " << GetTime() - time_s << std::endl;
+
+	std::cout << std::endl << "Fucking 11 pot : " << static_cast<float>(device_pots.at(11)) << std::endl;
+	std::cout<<std::endl << "Fucking green value : "<<static_cast<int>(static_cast<MyColor>(device_board.at(2)).b) <<" got it ?" << std::endl;
+
+	RenderTexture2D tex = LoadRenderTexture(width, height);
 	while (!WindowShouldClose()) {
-		ClearBackground(WHITE);
 
-		//std::function<void(int, int)> threader = [&](int starty, int endy) {
+		for (auto& x : charges) {
+			if (x.pos.x < 0 || x.pos.x >= width ) {
 
-		//	for (int x = 0; x < 900; x++) {
-		//		for (int y = starty; y < endy; y++) {
-		//			float pot = 0;
-		//			for (auto& q : charges)
-		//				pot += q.getPot(Vec2(x, y));
-		//			auto r = Vec4(RED);
-		//			auto b = Vec4(BLUE);
-		//			float fac = pot / maxPot;
-		//			if (fac > 1)
-		//				fac = 1;
-		//			if (fac < -1)
-		//				fac = -1;
-		//			fac = (fac + 1) / 2;
-		//			auto avg = b * fac + r * (1 - fac);
-		//			getCol(y,x) = raylib::Color(avg);
-		//		}
-		//	}
-		//};
+				x.vel.x = -x.vel.x;
 
-		////std::thread thr(threader, 0, 450);
-		//threader(0, 900);
-		////thr.join();
-
-	//parllel stuff
-	// calculate the pot of each element in-place
-		for (auto& qz : charges) {
-			
-			float q = qz.charge;
-			float qx = qz.pos.x;
-			float qy = qz.pos.y;
-			std::string tmp = part1 + std::to_string(q) + part2 + std::to_string(qx) + part3 + std::to_string(qy) + part4;
-			boost::compute::function<PointPot(PointPot)> calculate_pot =
-				boost::compute::make_function_from_source<PointPot(PointPot)>(
-					"calculate_pot",
-					tmp
-					);
-
-			
-			compute::transform(
-				device_vector.begin(),
-				device_vector.end(),
-				device_vector.begin(),
-				calculate_pot,
-				queue
-			);
-		}
-		// copy values back to the host
-		compute::copy(
-			device_vector.begin(), device_vector.end(), points, queue
-		);
-
-
-
-		BeginDrawing();
-		//parallel stuff
-		for (int x = 0; x < 900; x++) {
-			for (int y = 0; y < 900; y++) {
-				auto pot = getPoint(x, y);
-				raylib::Color c;
-				c.r = pot.r;
-				c.g = pot.g;
-				c.b = pot.b;
-				c.a = pot.a;
-				c.DrawPixel(x, y);
+				//x.q = GetRandomValue(-10, 10)/10.0;
+				//x.pos.x = static_cast<cl_float>(GetRandomValue(0, width));
+				//x.pos.y = static_cast<cl_float>(GetRandomValue(0, height));
+				//x.vel.x = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
+				//x.vel.y = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
+				
 			}
+			if (x.pos.y < 0 ||  x.pos.y >= height) {
+
+				x.vel.y = -x.vel.y;
+
+				//x.q = GetRandomValue(-10, 10)/10.0;
+				//x.pos.x = static_cast<cl_float>(GetRandomValue(0, width));
+				//x.pos.y = static_cast<cl_float>(GetRandomValue(0, height));
+				//x.vel.x = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
+				//x.vel.y = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
+				
+			}
+
+			x.pos.x += x.vel.x * GetFrameTime();
+			x.pos.y += x.vel.y * GetFrameTime();
+
+
+			Point field;
+			field.x = 0;
+			field.y = 0;
+			for (auto& y : charges) {
+
+				Point vr;
+				vr.x = x.pos.x - y.pos.x;
+				vr.y = x.pos.y - y.pos.y;
+
+				float r = sqrt(vr.x * vr.x + vr.y * vr.y);
+
+				if (r == 0) {
+				}
+				else if (r < constants[1] * abs(y.q)) {
+					float mag = y.q * constants[0] / (r * r * constants[1] * abs(y.q));
+					field.x += mag * vr.x;
+					field.y += mag * vr.y;
+				}
+
+				else {
+					float mag = y.q * constants[0] / (r * r * r);
+					field.x += mag * vr.x;
+					field.y += mag * vr.y;
+				}
+
+			}
+			x.vel.x += field.x * GetFrameTime();
+			x.vel.y += field.y * GetFrameTime();
+
+		}
+
+	
+		compute::copy(charges.begin(), charges.end(), device_charges.begin(), queue);
+		queue.enqueue_1d_range_kernel(pot_kernel, 0, width* height, 0);
+		queue.enqueue_1d_range_kernel(col_kernel, 0, width* height, 0);
+		/*
+		queue.enqueue_1d_range_kernel(elec_field_kernel, 0, width* height, 0);
+		queue.enqueue_1d_range_kernel(pos_kernel, 0, nCharges, 0);*/
+
+
+		compute::copy(device_board.begin(), device_board.end(), board.begin(), queue);
+
+
+
+
+
+		BeginTextureMode(tex);
+		UpdateTexture(tex.texture, static_cast<void*>(board.data()));
+		EndTextureMode();
+		BeginDrawing();
+
+		// NOTE: Render texture must be y-flipped due to default OpenGL coordinates (left-bottom) BUT Since we're drawing maually , no problem
+		DrawTextureRec(tex.texture, Rectangle{ 0, 0, (float)tex.texture.width, (float)tex.texture.height }, Vec2{ 0, 0 }, WHITE);
+		//DrawTextureRec(tex.texture, Rectangle{ 0, 0, (float)tex.texture.width, (float)-tex.texture.height }, Vec2{ 0, 0 }, WHITE);
+
+
+		for (auto& c : charges) {
+			DrawCircle(c.pos.x, c.pos.y, abs(c.q * unitR), signbit(c.q) ? BLACK : WHITE);
 		}
 		
-
-	/*	for (int x = 0; x < 900; x++) {
-			for (int y = 0; y < 900; y++) {
-				getCol(y,x).DrawPixel(x, y);
-			}
-		}*/
-
-		for (int i = 0; i < number; i++) {
-			auto& q = charges.at(i);
-			auto& f = fields.at(i);
-			DrawCircle(q.pos.x, q.pos.y, q.unitR * abs(q.charge), (signbit(q.charge) ? BLACK : YELLOW));
-
-			//DrawLine(q.pos.x, q.pos.y, q.pos.x + q.vel.x * 10, q.pos.y + q.vel.y * 10, BLUE);
-			DrawLine(q.pos.x, q.pos.y, q.pos.x + f.x * 1000, q.pos.y + f.y * 1000, GRAY);
-
-
-		}
-		DrawFPS(10, 10);
+		DrawFPS(30, 30);
 		EndDrawing();
-		if (true) {
-			try {
-				updateField();
-			}
-			catch (CollideExp c) {
-				collide = true;
-			}
-			updatePos();
-		}
-
-		if (number >= 2) {
-			if ((charges[0].pos.x < 0 || charges[0].pos.x>900 ||
-				charges[0].pos.y < 0 || charges[0].pos.y>900) &&
-				(charges[1].pos.x < 0 || charges[1].pos.x>900 ||
-				charges[1].pos.y < 0 || charges[1].pos.y>900)) {
-
-				charges[0].pos.x = GetRandomValue(0, 900);
-				charges[0].pos.y = GetRandomValue(0, 900);
-				charges[0].vel.x = GetRandomValue(0, 900) / 300.0f;
-				charges[0].vel.y = GetRandomValue(0, 900) / 300.0f;
-
-				charges[1].pos.x = GetRandomValue(0, 900);
-				charges[1].pos.y = GetRandomValue(0, 900);
-				charges[1].vel.x = GetRandomValue(0, 900) / 300.0f;
-				charges[1].vel.y = GetRandomValue(0, 900) / 300.0f;
-			}
-		}
 
 	}
+	UnloadRenderTexture(tex);
+
+
+
 	return 0;
 }
