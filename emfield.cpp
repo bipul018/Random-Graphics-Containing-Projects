@@ -80,17 +80,25 @@ int emfield() {
 	InitWindow(width, height, "EM Simulation");
 	SetTargetFPS(60);
 
-	constexpr size_t NumofCharges = 50;
+	constexpr size_t NumofCharges = 140;
+	//constexpr size_t NumofCharges = 136;
 	const cl_int nCharges = NumofCharges;
 	std::array<Charge, NumofCharges> charges;
 
 	for (auto& chr : charges) {
-		chr.q = GetRandomValue(-10, 10)/10.0;
-		chr.pos.x = GetRandomValue(0, width);
-		chr.pos.y = GetRandomValue(0, height);
-		chr.vel.x = GetRandomValue(-100, 100) / 50.0;
-		chr.vel.y = GetRandomValue(-100, 100) / 50.0;
+		chr.q = GetRandomValue(-20, 20)/10.0;
+		chr.pos.x = GetRandomValue(width/3, 2*width/3);
+		chr.pos.y = GetRandomValue(height/3, 2*height/3);
+		chr.vel.x = GetRandomValue(-400, 400) / 50.0;
+		chr.vel.y = GetRandomValue(-400, 400) / 50.0;
 	}
+
+	charges[0].pos.x = 200;
+	charges[0].pos.y = 100;
+	
+	charges[0].vel.x = 10;
+	charges[0].vel.y = 10;
+
 
 	constexpr float k = 10000;
 	constexpr float unitRadius = 10;
@@ -169,17 +177,18 @@ int emfield() {
 			\n
 			else {
 				results[index] += charges[i].q * constants[0] / r;
-			}
+			}	
 			\n
 		}
 	}\n
+
 	kernel void calc_elec_field(global Point* points, global Charge* charges,global Point* elec_field, global float* constants,int nCharges) {
 		\n
 		size_t index = get_global_id(0);
 		elec_field[index].x = 0;
 		elec_field[index].y = 0;
 		\n
-			for (size_t i = 0; i < nCharges; ++i) {
+		for (size_t i = 0; i < nCharges; ++i) {
 			\n
 			Point vr ;
 			vr.x = points[index].x - charges[i].pos.x;
@@ -187,12 +196,15 @@ int emfield() {
 
 			float r = sqrt(vr.x*vr.x+vr.y*vr.y);
 			\n
-			if(r == 0){
+			if(r==0){
 			}
-			if (r < constants[1] * my_abs(charges[i].q)) {
-				float mag = charges[i].q * constants[0] / (r * r * constants[1] * my_abs(charges[i].q));
-				elec_field[index].x += mag * vr.x;
-				elec_field[index].y += mag * vr.y;
+
+			else if (r < constants[1] * my_abs(charges[i].q)) {
+				float rr = constants[1] * my_abs(charges[i].q);
+				float mag = charges[i].q * constants[0] / (rr * rr * rr);
+				elec_field[index].x += mag * vr.x * rr / r;
+				elec_field[index].y += mag * vr.y * rr / r;
+				
 			}
 			\n
 			else {
@@ -204,16 +216,50 @@ int emfield() {
 		}
 	}\n
 
-	kernel void update_pos_vel(global Charge* charges, global Point* elec_field,int maxWidth, int maxHeight){
+	kernel void update_pos_vel(global Charge* charges, global Point* elec_field, float delTime) {
 		size_t index = get_global_id(0);
-		int x = (int)(charges[index].pos.x);
-		int y = (int)(charges[index].pos.y);
-		if (x >= 0 && x < maxWidth && y >= 0 && y < maxHeight) {
-			charges[index].pos.x += charges[index].vel.x;
-			charges[index].pos.y += charges[index].vel.y;
-			charges[index].vel.x += elec_field[y * maxWidth + x].x;
-			charges[index].vel.y += elec_field[y * maxWidth + x].y;
+		charges[index].pos.x += charges[index].vel.x * delTime;
+		charges[index].pos.y += charges[index].vel.y * delTime;
+		charges[index].vel.x += charges[index].q * elec_field[index].x * delTime;
+		charges[index].vel.y += charges[index].q * elec_field[index].y * delTime;
+
+
+	}
+	
+	kernel void calc_charge_field(global Charge* charges, global Point* elec_field, global float* constants, int nCharges) {
+		size_t index = get_global_id(0);
+		elec_field[index].x = 0;
+		elec_field[index].y = 0;
+
+
+		for (int i = 0; i < nCharges; ++i) {
+			Point vr;
+			vr.x = charges[index].pos.x - charges[i].pos.x;
+			vr.y = charges[index].pos.y - charges[i].pos.y;
+
+			float r = sqrt(vr.x * vr.x + vr.y * vr.y);
+			\n
+				if (r == 0) {
+				}
+
+				else if (r <= constants[1] * my_abs(charges[i].q)) {
+					float rr = constants[1] * my_abs(charges[i].q);
+					float mag = charges[i].q * constants[0] / (rr * rr * rr);
+					elec_field[index].x += mag * vr.x * rr / r;
+					elec_field[index].y += mag * vr.y * rr / r;
+
+				}
+			\n
+				else {
+					float mag = charges[i].q * constants[0] / (r * r * r);
+					elec_field[index].x += mag * vr.x;
+					elec_field[index].y += mag * vr.y;
+				}
+			\n
+
 		}
+
+
 	}
 
 	kernel void calc_col(global float* pots, global MyColor* results, global float* constants) {
@@ -236,12 +282,13 @@ int emfield() {
 
 	);
 
-
 	compute::program device_prog = compute::program::build_with_source(device_codes, context);
+
 
 	compute::kernel pot_kernel(device_prog, "calc_pot");
 	compute::kernel col_kernel(device_prog, "calc_col");
 	compute::kernel elec_field_kernel(device_prog, "calc_elec_field");
+	compute::kernel charge_elec_kernel(device_prog, "calc_charge_field");
 	compute::kernel pos_kernel(device_prog, "update_pos_vel");
 
 	compute::vector<Point> device_points(width* height, context);
@@ -250,6 +297,7 @@ int emfield() {
 	compute::vector<float> device_pots(width* height, context);
 	compute::vector<float> device_consts(sizeof(constants) / sizeof(constants[0]), context);
 	compute::vector<Point> device_elec_field(width* height, context);
+	compute::vector<Point> device_ch_elec_field(nCharges, context);
 
 	auto time_s = GetTime();
 
@@ -264,7 +312,7 @@ int emfield() {
 	pot_kernel.set_arg(3, device_consts.get_buffer());
 	pot_kernel.set_arg(4, sizeof(nCharges), &nCharges);
 
-
+			 
 	col_kernel.set_arg(0, device_pots.get_buffer());
 	col_kernel.set_arg(1, device_board.get_buffer());
 	col_kernel.set_arg(2, device_consts.get_buffer());
@@ -276,9 +324,13 @@ int emfield() {
 	elec_field_kernel.set_arg(4, sizeof(nCharges), &nCharges);
 
 	pos_kernel.set_arg(0, device_charges.get_buffer());
-	pos_kernel.set_arg(1, device_elec_field.get_buffer());
-	pos_kernel.set_arg(2, clWid);
-	pos_kernel.set_arg(3, clHei);
+	pos_kernel.set_arg(1, device_ch_elec_field.get_buffer());
+	pos_kernel.set_arg(2, static_cast<cl_float>(0));
+
+	charge_elec_kernel.set_arg(0, device_charges.get_buffer());
+	charge_elec_kernel.set_arg(1, device_ch_elec_field.get_buffer());
+	charge_elec_kernel.set_arg(2, device_consts.get_buffer());
+	charge_elec_kernel.set_arg(3, sizeof(nCharges), &nCharges);
 
 	std::cout << "Time spent = " << GetTime() - time_s << std::endl;
 
@@ -286,85 +338,105 @@ int emfield() {
 	std::cout<<std::endl << "Fucking green value : "<<static_cast<int>(static_cast<MyColor>(device_board.at(2)).b) <<" got it ?" << std::endl;
 
 	RenderTexture2D tex = LoadRenderTexture(width, height);
+	bool simulate = false;
 	while (!WindowShouldClose()) {
+		//for (auto& x : charges) {
+		//	if (x.pos.x < 0 || x.pos.x >= width ) {
 
-		for (auto& x : charges) {
-			if (x.pos.x < 0 || x.pos.x >= width ) {
+		//		x.vel.x = -0.9*x.vel.x;
+		//		if (x.pos.x < 0)
+		//			x.pos.x = 0;
+		//		if (x.pos.x >= width)
+		//			x.pos.x = width - 1;
 
-				x.vel.x = -x.vel.x;
+		//		//x.q = GetRandomValue(-10, 10)/10.0;
+		//		//x.pos.x = static_cast<cl_float>(GetRandomValue(0, width));
+		//		//x.pos.y = static_cast<cl_float>(GetRandomValue(0, height));
+		//		//x.vel.x = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
+		//		//x.vel.y = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
+		//		
+		//	}
+		//	if (x.pos.y < 0 ||  x.pos.y >= height) {
 
-				//x.q = GetRandomValue(-10, 10)/10.0;
-				//x.pos.x = static_cast<cl_float>(GetRandomValue(0, width));
-				//x.pos.y = static_cast<cl_float>(GetRandomValue(0, height));
-				//x.vel.x = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
-				//x.vel.y = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
-				
+		//		x.vel.y = -0.9*x.vel.y;
+		//		if (x.pos.y < 0)
+		//			x.pos.y = 0;
+		//		if (x.pos.y >= width)
+		//			x.pos.y = width - 1;
+
+		//		//x.q = GetRandomValue(-10, 10)/10.0;
+		//		//x.pos.x = static_cast<cl_float>(GetRandomValue(0, width));
+		//		//x.pos.y = static_cast<cl_float>(GetRandomValue(0, height));
+		//		//x.vel.x = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
+		//		//x.vel.y = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
+		//		
+		//	}
+
+		//	x.pos.x += x.vel.x * GetFrameTime();
+		//	x.pos.y += x.vel.y * GetFrameTime();
+
+
+		//	Point field;
+		//	field.x = 0;
+		//	field.y = 0;
+		//	for (auto& y : charges) {
+
+		//		Point vr;
+		//		vr.x = x.pos.x - y.pos.x;
+		//		vr.y = x.pos.y - y.pos.y;
+
+		//		float r = sqrt(vr.x * vr.x + vr.y * vr.y);
+
+		//		if (r == 0) {
+		//		}
+		//		else if (r < constants[1] * abs(y.q)) {
+		//			float mag = y.q * constants[0] / (r * r * constants[1] * abs(y.q));
+		//			field.x -= mag * vr.x;
+		//			field.y -= mag * vr.y;
+		//		}
+
+		//		else {
+		//			float mag = y.q * constants[0] / (r * r * r);
+		//			field.x -= mag * vr.x;
+		//			field.y -= mag * vr.y;
+		//		}
+
+		//	}
+		//	x.vel.x += x.q*field.x * GetFrameTime();
+		//	x.vel.y += x.q*field.y * GetFrameTime();
+
+		//}
+		if (IsKeyReleased(KEY_SPACE)) {
+			simulate = !simulate;
+		}
+		if (!simulate && IsKeyReleased(KEY_ENTER)) {
+			Point p = device_elec_field.at(0);
+			std::cout << "Eo = " << p.x << " " << p.y << "\n";
+			for (auto& q : charges) {
+				Point p = device_elec_field.at(int(q.pos.y) * width + int(q.pos.x));
+				std::cout << "\n Q :" << q.q << " Pos : " << q.pos.x << " " << q.pos.y
+					<< " Vel : " << q.vel.x << " " << q.vel.y << " E : " << p.x << " " << p.y << "\n";
 			}
-			if (x.pos.y < 0 ||  x.pos.y >= height) {
-
-				x.vel.y = -x.vel.y;
-
-				//x.q = GetRandomValue(-10, 10)/10.0;
-				//x.pos.x = static_cast<cl_float>(GetRandomValue(0, width));
-				//x.pos.y = static_cast<cl_float>(GetRandomValue(0, height));
-				//x.vel.x = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
-				//x.vel.y = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
-				
-			}
-
-			x.pos.x += x.vel.x * GetFrameTime();
-			x.pos.y += x.vel.y * GetFrameTime();
-
-
-			Point field;
-			field.x = 0;
-			field.y = 0;
-			for (auto& y : charges) {
-
-				Point vr;
-				vr.x = x.pos.x - y.pos.x;
-				vr.y = x.pos.y - y.pos.y;
-
-				float r = sqrt(vr.x * vr.x + vr.y * vr.y);
-
-				if (r == 0) {
-				}
-				else if (r < constants[1] * abs(y.q)) {
-					float mag = y.q * constants[0] / (r * r * constants[1] * abs(y.q));
-					field.x += mag * vr.x;
-					field.y += mag * vr.y;
-				}
-
-				else {
-					float mag = y.q * constants[0] / (r * r * r);
-					field.x += mag * vr.x;
-					field.y += mag * vr.y;
-				}
-
-			}
-			x.vel.x += field.x * GetFrameTime();
-			x.vel.y += field.y * GetFrameTime();
-
 		}
 
-	
-		compute::copy(charges.begin(), charges.end(), device_charges.begin(), queue);
-		queue.enqueue_1d_range_kernel(pot_kernel, 0, width* height, 0);
-		queue.enqueue_1d_range_kernel(col_kernel, 0, width* height, 0);
-		/*
-		queue.enqueue_1d_range_kernel(elec_field_kernel, 0, width* height, 0);
-		queue.enqueue_1d_range_kernel(pos_kernel, 0, nCharges, 0);*/
+		if (simulate) {
+			queue.enqueue_1d_range_kernel(pos_kernel, 0, nCharges, 0);
+			queue.enqueue_1d_range_kernel(charge_elec_kernel, 0, nCharges, 0);
+
+			queue.enqueue_1d_range_kernel(pot_kernel, 0, width * height, 0);
+			queue.enqueue_1d_range_kernel(col_kernel, 0, width * height, 0);
 
 
-		compute::copy(device_board.begin(), device_board.end(), board.begin(), queue);
+			compute::copy(device_board.begin(), device_board.end(), board.begin(), queue);
+			compute::copy(device_charges.begin(), device_charges.end(), charges.begin(), queue);
 
 
 
 
-
-		BeginTextureMode(tex);
-		UpdateTexture(tex.texture, static_cast<void*>(board.data()));
-		EndTextureMode();
+			BeginTextureMode(tex);
+			UpdateTexture(tex.texture, static_cast<void*>(board.data()));
+			EndTextureMode();
+		}
 		BeginDrawing();
 
 		// NOTE: Render texture must be y-flipped due to default OpenGL coordinates (left-bottom) BUT Since we're drawing maually , no problem
@@ -375,14 +447,22 @@ int emfield() {
 		for (auto& c : charges) {
 			DrawCircle(c.pos.x, c.pos.y, abs(c.q * unitR), signbit(c.q) ? BLACK : WHITE);
 		}
+
+		//for (int x = 0; x < width / 9; x++) {
+		//	for (int y = 0; y < height / 9; y++) {
+		//		Point p = device_elec_field.at((y * 9 + 4) * width + (x * 9 + 4));
+		//		DrawLine(x * 9 + 4, y * 9 + 4, x * 9 + 4 + p.x / 100, y * 9 + 4 + p.y / 100, RED);
+		//	}
+		//}
 		
 		DrawFPS(30, 30);
 		EndDrawing();
+		
 
+		pos_kernel.set_arg(2, static_cast<cl_float>(GetFrameTime()));
 	}
 	UnloadRenderTexture(tex);
-
-
+	CloseWindow();
 
 	return 0;
 }
