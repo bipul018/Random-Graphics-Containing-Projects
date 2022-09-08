@@ -24,8 +24,14 @@
     <ClCompile Include="emfield.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="chess.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />
+    <None Include="simulator.cl">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

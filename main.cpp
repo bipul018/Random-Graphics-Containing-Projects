@@ -1,6 +1,7 @@
-
+#include <iostream>
 int sudoku();
 int emfield();
+int chess();
 
 struct PointPot {
 	float x;
@@ -18,6 +19,16 @@ struct MyColor {
 
 int main() {
 
-	return emfield();
-	return sudoku();
+	std::cout << "Enter e for em simulation and s for sudoku :  c for chess:";
+	char c = 'x';
+	std::cin >> c;
+	switch (c) {
+	case 'e':
+		return emfield();
+	case 's':
+		return sudoku();
+	case 'c':
+		return chess();
+	}
+
 }

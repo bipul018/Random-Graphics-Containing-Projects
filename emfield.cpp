@@ -80,7 +80,7 @@ int emfield() {
 	InitWindow(width, height, "EM Simulation");
 	SetTargetFPS(60);
 
-	constexpr size_t NumofCharges = 140;
+	constexpr size_t NumofCharges = 5;
 	//constexpr size_t NumofCharges = 136;
 	const cl_int nCharges = NumofCharges;
 	std::array<Charge, NumofCharges> charges;
@@ -103,11 +103,13 @@ int emfield() {
 	constexpr float k = 10000;
 	constexpr float unitRadius = 10;
 	constexpr float maxPot = -500;
+	constexpr float vel = 30;
 
-	float constants[3];
+	float constants[4];
 	constants[0] = k;
 	constants[1] = unitRadius;
 	constants[2] = maxPot;
+	constants[3] = vel;
 
 	std::vector<MyColor> board;
 	std::vector<Point> points;
@@ -135,7 +137,8 @@ int emfield() {
 	compute::command_queue queue(context, device);
 
 
-	const char device_codes[] = BOOST_COMPUTE_STRINGIZE_SOURCE(
+	const char device_codes[] = BOOST_COMPUTE_STRINGIZE_SOURCE
+	(
 
 	typedef struct {
 
@@ -282,6 +285,8 @@ int emfield() {
 
 	);
 
+	
+	//compute::program device_prog = compute::program::build_with_source_file("simulator.cl", context);
 	compute::program device_prog = compute::program::build_with_source(device_codes, context);
 
 
@@ -311,6 +316,7 @@ int emfield() {
 	pot_kernel.set_arg(2, device_pots.get_buffer());
 	pot_kernel.set_arg(3, device_consts.get_buffer());
 	pot_kernel.set_arg(4, sizeof(nCharges), &nCharges);
+	pot_kernel.set_arg(5, static_cast<cl_float>(0));
 
 			 
 	col_kernel.set_arg(0, device_pots.get_buffer());
@@ -340,72 +346,6 @@ int emfield() {
 	RenderTexture2D tex = LoadRenderTexture(width, height);
 	bool simulate = false;
 	while (!WindowShouldClose()) {
-		//for (auto& x : charges) {
-		//	if (x.pos.x < 0 || x.pos.x >= width ) {
-
-		//		x.vel.x = -0.9*x.vel.x;
-		//		if (x.pos.x < 0)
-		//			x.pos.x = 0;
-		//		if (x.pos.x >= width)
-		//			x.pos.x = width - 1;
-
-		//		//x.q = GetRandomValue(-10, 10)/10.0;
-		//		//x.pos.x = static_cast<cl_float>(GetRandomValue(0, width));
-		//		//x.pos.y = static_cast<cl_float>(GetRandomValue(0, height));
-		//		//x.vel.x = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
-		//		//x.vel.y = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
-		//		
-		//	}
-		//	if (x.pos.y < 0 ||  x.pos.y >= height) {
-
-		//		x.vel.y = -0.9*x.vel.y;
-		//		if (x.pos.y < 0)
-		//			x.pos.y = 0;
-		//		if (x.pos.y >= width)
-		//			x.pos.y = width - 1;
-
-		//		//x.q = GetRandomValue(-10, 10)/10.0;
-		//		//x.pos.x = static_cast<cl_float>(GetRandomValue(0, width));
-		//		//x.pos.y = static_cast<cl_float>(GetRandomValue(0, height));
-		//		//x.vel.x = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
-		//		//x.vel.y = static_cast<cl_float>(GetRandomValue(-1000, 1000) / 50.0);
-		//		
-		//	}
-
-		//	x.pos.x += x.vel.x * GetFrameTime();
-		//	x.pos.y += x.vel.y * GetFrameTime();
-
-
-		//	Point field;
-		//	field.x = 0;
-		//	field.y = 0;
-		//	for (auto& y : charges) {
-
-		//		Point vr;
-		//		vr.x = x.pos.x - y.pos.x;
-		//		vr.y = x.pos.y - y.pos.y;
-
-		//		float r = sqrt(vr.x * vr.x + vr.y * vr.y);
-
-		//		if (r == 0) {
-		//		}
-		//		else if (r < constants[1] * abs(y.q)) {
-		//			float mag = y.q * constants[0] / (r * r * constants[1] * abs(y.q));
-		//			field.x -= mag * vr.x;
-		//			field.y -= mag * vr.y;
-		//		}
-
-		//		else {
-		//			float mag = y.q * constants[0] / (r * r * r);
-		//			field.x -= mag * vr.x;
-		//			field.y -= mag * vr.y;
-		//		}
-
-		//	}
-		//	x.vel.x += x.q*field.x * GetFrameTime();
-		//	x.vel.y += x.q*field.y * GetFrameTime();
-
-		//}
 		if (IsKeyReleased(KEY_SPACE)) {
 			simulate = !simulate;
 		}
@@ -460,6 +400,7 @@ int emfield() {
 		
 
 		pos_kernel.set_arg(2, static_cast<cl_float>(GetFrameTime()));
+		pot_kernel.set_arg(5, static_cast<cl_float>(GetFrameTime()));
 	}
 	UnloadRenderTexture(tex);
 	CloseWindow();
