@@ -83,16 +83,14 @@ std::vector<Pos> getPossibleMoves(Pos ppos) {
 	auto& piece = GetCell::get(ppos.row, ppos.col);
 	
 	std::vector<Pos> moves;
-	Pos p;
-	p.row = ppos.row;
-	p.col = ppos.col;
 	moves.clear();
 	if (piece.color != C_BLANK) {
-		auto compCol = (piece.color == C_WHITE) ? C_BLACK : C_WHITE;
-		switch (piece.type) {
 
-		case PAWN:
-		{
+		auto compCol = (piece.color == C_WHITE) ? C_BLACK : C_WHITE;
+
+		auto fillpawn = [&]() {
+			Pos p;
+			p.col = ppos.col;
 			auto frontrow = ppos.row + ((piece.color == C_WHITE) ? 1 : -1);
 			p.row = frontrow;
 			try {
@@ -143,33 +141,151 @@ std::vector<Pos> getPossibleMoves(Pos ppos) {
 
 			}
 
-			break;
-		}
-		case ROOK:
-		{
-			p.row = ppos.row;
-			p.col = ppos.col;
 
-			auto tmpfunc = [&]()->bool {
-				if (GetCell::get(p.row, p.col).color == C_BLANK)
+		};
+
+		//pushes a move if the place is not occupied by friend , returns true it it was empty
+		auto tmpfunc = [&](Pos p)->bool {
+			if (GetCell::get(p.row, p.col).color == C_BLANK)
+				moves.push_back(p);
+			else {
+				if (GetCell::get(p.row, p.col).color == compCol)
 					moves.push_back(p);
-				else {
-					if (GetCell::get(p.row, p.col).color == compCol)
-						moves.push_back(p);
-					return false;
-				}
-				return true;
-			};
+				return false;
+			}
+			return true;
+		};
 
-			while (((++p.row) < 8) && tmpfunc());
+		auto fillrook = [&]() {
+			Pos p;
 			p.row = ppos.row;
-			while (((--p.row) >= 0) && tmpfunc());
-			p.row = ppos.row;
-			while (((++p.col) < 8) && tmpfunc());
 			p.col = ppos.col;
-			while (((--p.col) >= 0) && tmpfunc());
+
+			while (((++p.row) < 8) && tmpfunc(p));
+			p.row = ppos.row;
+			while (((--p.row) >= 0) && tmpfunc(p));
+			p.row = ppos.row;
+			while (((++p.col) < 8) && tmpfunc(p));
+			p.col = ppos.col;
+			while (((--p.col) >= 0) && tmpfunc(p));
+		};
+		auto fillknight = [&]() {
+
+		};
+		auto fillbishop = [&]() {
+			Pos p;
+			p.row = ppos.row;
+			p.col = ppos.col;
+			while (((++p.row) < 8)&& ((++p.col) < 8) && tmpfunc(p));
+
+			p.row = ppos.row;
+			p.col = ppos.col;
+			while (((++p.row) < 8)&& ((--p.col) >= 0) && tmpfunc(p));
+
+			p.row = ppos.row;
+			p.col = ppos.col;
+			while (((--p.row) >= 0)&& ((++p.col) < 8) && tmpfunc(p));
+
+			p.row = ppos.row;
+			p.col = ppos.col;
+			while (((--p.row) >= 0)&& ((--p.col) >= 0) && tmpfunc(p));
+
+		};
+		auto fillqueen=[&]() {
+			Pos p;
+			p.row = ppos.row;
+			p.col = ppos.col;
+			fillbishop();
+			fillrook();
+		};
+		auto fillking=[&]() {
+			Pos p;
+			p.row = ppos.row;
+			p.col = ppos.col;
+			try {
+				++p.row;
+				tmpfunc(p);
+			}
+			catch (...) {
+
+			}
+			try {
+				++p.col;
+				tmpfunc(p);
+			}
+			catch (...) {
+
+			}
+			try {
+				p.col -= 2;
+				tmpfunc(p);
+			}
+			catch (...) {
+
+			}
+			try {
+				--p.row;
+				tmpfunc(p);
+			}
+			catch (...) {
+
+			}
+			try {
+				p.col += 2;
+				tmpfunc(p);
+			}
+			catch (...) {
+
+			}
+			try {
+				--p.row;
+				tmpfunc(p);
+			}
+			catch (...) {
+
+			}
+			try {
+				--p.col;
+				tmpfunc(p);
+			}
+			catch (...) {
+
+			}
+			try {
+				--p.col;
+				tmpfunc(p);
+			}
+			catch (...) {
+
+			}
+		};
+
+
+		switch (piece.type) {
+
+		case PAWN:
+
+			fillpawn();
 			break;
-		}
+
+		case ROOK:
+
+			fillrook();
+			break;
+
+		case KNIGHT:
+			fillknight();
+			break;
+		case BISHOP:
+			fillbishop();
+			break;
+		case QUEEN:
+			fillqueen();
+			break;
+		case KING:
+			fillking();
+			break;
+
 
 		default:
 			break;
