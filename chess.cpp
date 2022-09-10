@@ -4,6 +4,7 @@
 #include <vector>
 #include <utility>
 #include <functional>
+#include <set>
 
 enum Piece {
 	PAWN,
@@ -28,6 +29,9 @@ enum Content {
 struct Pos {
 	int row;
 	int col;
+	bool operator <(Pos b)const {
+		return ((row * 8 + col) < (b.row * 8 + b.col));
+	}
 };
 
 struct Cell {
@@ -146,11 +150,16 @@ std::vector<Pos> getPossibleMoves(Pos ppos) {
 
 		//pushes a move if the place is not occupied by friend , returns true it it was empty
 		auto tmpfunc = [&](Pos p)->bool {
-			if (GetCell::get(p.row, p.col).color == C_BLANK)
-				moves.push_back(p);
-			else {
-				if (GetCell::get(p.row, p.col).color == compCol)
+			try {
+				if (GetCell::get(p.row, p.col).color == C_BLANK)
 					moves.push_back(p);
+				else {
+					if (GetCell::get(p.row, p.col).color == compCol)
+						moves.push_back(p);
+					return false;
+				}
+			}
+			catch (...) {
 				return false;
 			}
 			return true;
@@ -170,6 +179,33 @@ std::vector<Pos> getPossibleMoves(Pos ppos) {
 			while (((--p.col) >= 0) && tmpfunc(p));
 		};
 		auto fillknight = [&]() {
+			Pos p;
+			p.row = ppos.row;
+			p.col = ppos.col;
+
+			p.row += 2; ++p.col;
+			tmpfunc(p);
+
+			--p.row; ++p.col;
+			tmpfunc(p);
+
+			p.row -= 2;
+			tmpfunc(p);
+
+			--p.row; --p.col;
+			tmpfunc(p);
+
+			p.col -= 2;
+			tmpfunc(p);
+
+			++p.row; --p.col;
+			tmpfunc(p);
+
+			p.row += 2;
+			tmpfunc(p);
+
+			++p.row; ++p.col;
+			tmpfunc(p);
 
 		};
 		auto fillbishop = [&]() {
@@ -198,66 +234,33 @@ std::vector<Pos> getPossibleMoves(Pos ppos) {
 			fillbishop();
 			fillrook();
 		};
-		auto fillking=[&]() {
+		auto fillking = [&]() {
 			Pos p;
 			p.row = ppos.row;
 			p.col = ppos.col;
-			try {
-				++p.row;
-				tmpfunc(p);
-			}
-			catch (...) {
+			++p.row;
+			tmpfunc(p);
 
-			}
-			try {
-				++p.col;
-				tmpfunc(p);
-			}
-			catch (...) {
+			++p.col;
+			tmpfunc(p);
 
-			}
-			try {
-				p.col -= 2;
-				tmpfunc(p);
-			}
-			catch (...) {
+			p.col -= 2;
+			tmpfunc(p);
 
-			}
-			try {
-				--p.row;
-				tmpfunc(p);
-			}
-			catch (...) {
+			--p.row;
+			tmpfunc(p);
 
-			}
-			try {
-				p.col += 2;
-				tmpfunc(p);
-			}
-			catch (...) {
+			p.col += 2;
+			tmpfunc(p);
 
-			}
-			try {
-				--p.row;
-				tmpfunc(p);
-			}
-			catch (...) {
+			--p.row;
+			tmpfunc(p);
 
-			}
-			try {
-				--p.col;
-				tmpfunc(p);
-			}
-			catch (...) {
+			--p.col;
+			tmpfunc(p);
 
-			}
-			try {
-				--p.col;
-				tmpfunc(p);
-			}
-			catch (...) {
-
-			}
+			--p.col;
+			tmpfunc(p);
 		};
 
 
@@ -377,8 +380,29 @@ int chess() {
 	move.col = -1;
 	bool isCheck = false;
 	Content currplayer = C_WHITE;
+	std::set<Pos> whites;
+	std::set<Pos> blacks;
+
+	for (int col = 0; col < 8; ++col) {
+		Pos p;
+		p.col = col;
+		p.row = 0;
+		whites.insert(p);
+		p.row = 1;
+		whites.insert(p);
+
+		p.row = 6;
+		blacks.insert(p);
+		p.row = 7;
+		blacks.insert(p);
+	}
+
 	while (!WindowShouldClose()) {
 		std::vector<Pos> moves;
+		//sets set of current and opposing player cells
+		auto& curr = (currplayer == C_WHITE) ? whites : blacks;
+		auto& opps = (currplayer == C_BLACK) ? whites : blacks;
+
 		moves.clear();
 		if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
 			auto pos = GetMousePosition();
@@ -427,6 +451,12 @@ int chess() {
 			moves = getPossibleMoves(select);
 			Cell& src = GetCell::get(select.row, select.col);
 			Cell& des = GetCell::get(move.row, move.col);
+
+			curr.erase(select);
+			if (des.color != C_BLANK)
+				opps.erase(move);
+			curr.insert(move);
+
 			des = src;
 			src.type = NONE;
 			src.color = C_BLANK;
@@ -441,6 +471,7 @@ int chess() {
 					break;
 				}
 			}
+
 
 			select.row = -1;
 			select.col = -1;
@@ -463,11 +494,19 @@ int chess() {
 					DrawCell::draw(row, col, BLUE);
 			}
 
-		for (auto& c : moves) {
-			DrawCell::draw(c.row, c.col, SKYBLUE);
-		}
 		std::string sout = "PLAYER : " + std::string(((currplayer == C_WHITE) ? "WHITE " : "BLACK "));
 
+		for (auto c : curr) {
+			Color tmp = YELLOW;
+			tmp.a = 150;
+			DrawCell::draw(c.row, c.col, tmp);
+		}
+
+		for (auto& c : moves) {
+			Color tmp = SKYBLUE;
+			tmp.a = 170;
+			DrawCell::draw(c.row, c.col, tmp);
+		}
 		if (isCheck) {
 			sout += "CHECK ";
 		}
