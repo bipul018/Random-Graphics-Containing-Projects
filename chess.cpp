@@ -308,6 +308,13 @@ Board* GetCell::board = nullptr;
 
 int chess() {
 
+	std::cout << "Enter one of following character \n  vs human : h || vs computer : c";
+	char ch;
+	std::cin >> ch;
+
+	bool isAI = (ch != 'h');
+
+
 	InitWindow(size, size*1.1, "Sudoku");
 	SetTargetFPS(60);
 
@@ -397,55 +404,79 @@ int chess() {
 		blacks.insert(p);
 	}
 
+	std::string movemessage = "";
 	while (!WindowShouldClose()) {
+		std::string sout = "";
+
 		std::vector<Pos> moves;
 		//sets set of current and opposing player cells
 		auto& curr = (currplayer == C_WHITE) ? whites : blacks;
 		auto& opps = (currplayer == C_BLACK) ? whites : blacks;
 
+
 		moves.clear();
-		if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-			auto pos = GetMousePosition();
-			if (pos.x >= 0 && pos.x < size && pos.y >= 0 && pos.y < size) {
-				int r = pos.y / cellSize;
-				int c = pos.x / cellSize;
-				r = 8 - r - 1;
+		if (currplayer == C_BLACK && isAI) {
 
-				//If a cell is already selected
-				if (select.row >= 0 && select.col >= 0) {
+			size_t size = curr.size();
+			size_t choice = GetRandomValue(0, size - 1);
+			auto  x = curr.begin();
+			for (int i = 0; i < choice; ++i)
+				++x;
+			auto moves = getPossibleMoves(*x);
+			select = *x;
+			if (moves.size() > 0)
+				move = moves.at(GetRandomValue(0, moves.size() - 1));
 
-					//If clicked on selected cell , unselect
-					if (select.row == r && select.col == c) {
-						select.row = -1;
-						select.col = -1;
-					}
-					else {
-						move.row = -1;
-						move.col = -1;
-						//if selected in one of valid moves , set moving to that cell
-						moves = getPossibleMoves(select);
-						for (auto& s : moves) {
-							if (r == s.row && c == s.col) {
-								move = s;
-								break;
+
+
+		}
+		else {
+
+			if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || (GetTouchPointCount()>0)) {
+				auto pos = GetMousePosition();
+				if (GetTouchPointCount() > 0) {
+					pos = GetTouchPosition(0);
+				}
+				if (pos.x >= 0 && pos.x < size && pos.y >= 0 && pos.y < size) {
+					int r = pos.y / cellSize;
+					int c = pos.x / cellSize;
+					r = 8 - r - 1;
+
+					//If a cell is already selected
+					if (select.row >= 0 && select.col >= 0) {
+
+						//If clicked on selected cell , unselect
+						if (select.row == r && select.col == c) {
+							select.row = -1;
+							select.col = -1;
+						}
+						else {
+							move.row = -1;
+							move.col = -1;
+							//if selected in one of valid moves , set moving to that cell
+							moves = getPossibleMoves(select);
+							for (auto& s : moves) {
+								if (r == s.row && c == s.col) {
+									move = s;
+									break;
+								}
+							}
+							//if not selected in any of valid moves , 
+							if ((move.row < 0 || move.col < 0) && (GetCell::get(r, c).color == currplayer)) {
+								select.row = r;
+								select.col = c;
 							}
 						}
-						//if not selected in any of valid moves , 
-						if ((move.row < 0 || move.col < 0) && (GetCell::get(r, c).color == currplayer)) {
-							select.row = r;
-							select.col = c;
-						}
+
+					}
+					else if (GetCell::get(r, c).color == currplayer) {
+						select.row = r;
+						select.col = c;
 					}
 
 				}
-				else if(GetCell::get(r, c).color == currplayer) {
-					select.row = r;
-					select.col = c;
-				}
-			
 			}
 		}
-
 		//If movable then move it, try catch block will manage if not movable
 		try {
 			moves = getPossibleMoves(select);
@@ -472,6 +503,8 @@ int chess() {
 				}
 			}
 
+			movemessage = char('A' + select.col) + std::to_string(select.row+1) + " -> " + char('A' + move.col)  + std::to_string(move.row+1);
+
 
 			select.row = -1;
 			select.col = -1;
@@ -494,7 +527,7 @@ int chess() {
 					DrawCell::draw(row, col, BLUE);
 			}
 
-		std::string sout = "PLAYER : " + std::string(((currplayer == C_WHITE) ? "WHITE " : "BLACK "));
+		sout += "PLAYER : " + std::string(((currplayer == C_WHITE) ? "WHITE " : "BLACK "));
 
 		for (auto c : curr) {
 			Color tmp = YELLOW;
@@ -510,8 +543,8 @@ int chess() {
 		if (isCheck) {
 			sout += "CHECK ";
 		}
-		
 		DrawText(sout.c_str(), contBorder + border, size + contBorder + border, cellSize/3, RED);
+		DrawText(movemessage.c_str(), contBorder + border, size + contBorder + border + cellSize /3, cellSize/3, RED);
 
 
 		EndDrawing();
