@@ -142,6 +142,7 @@
     <ClCompile Include="chess.cpp" />
     <ClCompile Include="emfield.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="mouseStuff.cpp" />
     <ClCompile Include="sudoku.cpp" />
   </ItemGroup>
   <ItemGroup>

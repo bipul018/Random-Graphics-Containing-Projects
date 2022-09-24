@@ -45,6 +45,9 @@ struct Cell {
 class Board : public std::array<Cell, 8 * 8>{
 public:
 
+	bool blackCheck = false;
+	bool whiteCheck = false;
+
 	Cell& at(int row, int col) {
 
 		if (row > 7 || row < 0 || col>7 || col < 0)
@@ -56,16 +59,51 @@ public:
 		return at(ppos.row, ppos.col);
 	}
 
-	std::vector<Pos> getmoves(int row, int col) {
+	int getcolcount(Content color) {
+		int c = 0;
+		for (int col = 0; col < 8; ++col) {
+			for (int row = 0; row < 8; ++row) {
+				Pos p;
+				p.row = row;
+				p.col = col;
+				if (at(p).color == color)
+					++c;
+
+			}
+		}
+		return c;
+
+	}
+
+	//Previously set as a std::set, probably for particular order of the pieces 
+	std::vector<Pos> getCells(Content color) {
+
+		std::vector<Pos> cells;
+
+
+		for (int col = 0; col < 8; ++col) {
+			for (int row = 0; row < 8; ++row) {
+				Pos p;
+				p.row = row;
+				p.col = col;
+				if (at(p).color == color)
+					cells.push_back(p);
+
+			}
+		}
+		return cells;
+	}
+
+	std::vector<Pos> getmoves(int row, int col, Piece forcedType = NONE) {
 		Pos p;
 		p.row = row;
 		p.col = col;
-		return getmoves(p);
+		return getmoves(p, forcedType);
 	}
 
-	std::vector<Pos> getmoves(Pos ppos) {
+	std::vector<Pos> getmoves(Pos ppos, Piece forcedType = NONE) {
 
-		auto& piece = at(ppos);
+		auto piece = at(ppos);
 
 		std::vector<Pos> moves;
 		moves.clear();
@@ -245,6 +283,9 @@ public:
 			};
 
 
+			if (forcedType != NONE)
+				piece.type = forcedType;
+
 			switch (piece.type) {
 
 			case PAWN:
@@ -278,9 +319,185 @@ public:
 		}
 		return moves;
 	}
+
+	//supposed to perform half of the move , ie checks if move is legal or not
+	bool trymove(Pos from, Pos to) {
+
+		Board tmpboard(*this);
+		try {
+			tmpboard.move(from, to);
+		}
+		catch (...) {
+			return false;
+		}
+
+		if ((at(from).color == C_WHITE) && (tmpboard.whiteCheck)) {
+			return false;
+		}
+		if ((at(from).color == C_BLACK) && (tmpboard.blackCheck)) {
+			return false;
+		}
+
+		return true;
+
+	}
+
+	//throws exception if move fails, returns true if eaten or smthing, I have not decided yet
+	bool move(Pos from, Pos to) {
+
+		Cell& src = at(from.row, from.col);
+		Cell& des = at(to.row, to.col);
+
+		auto srcCol = src.color;
+		if (srcCol == C_BLANK)
+			throw "Cannot move when there's no piece ";
+
+		auto moves = getmoves(from);
+		for (auto& x : moves) {
+			if (((x.row) == (to.row)) && ((x.col) == (to.col))) {
+
+				auto revCol = ((srcCol == C_BLACK) ? C_WHITE : C_BLACK);
+
+				des = src;
+				src.type = NONE;
+				src.color = C_BLANK;
+
+
+				//Find the kings
+				auto whites = getCells(C_WHITE);
+				auto blacks = getCells(C_BLACK);
+
+				Pos blackKing; blackKing.row = -1; blackKing.col = -1;
+				Pos whiteKing; whiteKing.row = -1; whiteKing.col = -1;
+
+				for (auto& x : whites) {
+					if (at(x).type == KING) {
+						whiteKing = x;
+						break;
+					}
+				}
+				for (auto& x : blacks) {
+					if (at(x).type == KING) {
+						blackKing = x;
+						break;
+					}
+				}
+
+
+				blackCheck = false;
+				whiteCheck = false;
+				//Update the check to king status
+				for (int i = PAWN; i < NONE; ++i) {
+
+					if (!whiteCheck) {
+						auto whiteEater = getmoves(whiteKing, static_cast<Piece>(i));
+						for (auto& x : whiteEater) {
+							if (at(x).type == i) {
+								whiteCheck = true;
+								break;
+							}
+						}
+					}
+
+					if (!blackCheck) {
+						auto blackEater = getmoves(blackKing, static_cast<Piece>(i));
+						for (auto& x : blackEater) {
+							if (at(x).type == i) {
+								blackCheck = true;
+								break;
+							}
+						}
+					}
+
+
+
+				}
+
+				return true;
+			}
+		}
+		throw "No can do this move, not possible at all.";
+	}
+
 };
-//
-//using Board = std::array<Cell, 8 * 8>;
+
+//Mechanism to read board condition from string
+//Uppercase is black and lowercase is white
+//Obviously the letters are all from english except knight is h
+
+const char defaultBoardCond[] = "\
+RHBQKBHR\
+PPPPPPPP\
+--------\
+--------\
+--------\
+--------\
+pppppppp\
+rhbqkbhr\
+";
+const char oneShotCheck[] = "\
+RHBQKBHR\
+PP-PPq-P\
+-----PP-\
+--P-----\
+--------\
+--p-p---\
+pp-p-ppp\
+rhb-kbhr\
+";
+
+bool fillBoard(Board& board, const char* filler) {
+
+	std::string boardval(filler);
+	if (boardval.size() < 64)
+		return false;
+
+	//since inside "Board" array class data are stored just in order as should be in string,
+	//ie black side first row by row , storing of data is just identically sequential
+
+	for (int n = 0; n < 8 * 8; ++n) {
+		if (boardval[n] >= 'a' && boardval[n] <= 'z') {
+			boardval[n] -= 'a' - 'A';
+			board[n].color = C_WHITE;
+		}
+		else if (boardval[n] >= 'A' && boardval[n] <= 'Z')
+			board[n].color = C_BLACK;
+		else if (boardval[n] == '-') {
+			board[n].type = NONE;
+			board[n].color = C_BLANK;
+			continue;
+		}
+		else
+			return false;
+
+		switch (boardval[n]) {
+		case 'P':
+			board[n].type = PAWN;
+			break;
+		case 'R':
+			board[n].type = ROOK;
+			break;
+		case 'H':
+			board[n].type = KNIGHT;
+			break;
+		case 'B':
+			board[n].type = BISHOP;
+			break;
+		case 'Q':
+			board[n].type = QUEEN;
+			break;
+		case 'K':
+			board[n].type = KING;
+			break;
+		default:
+			return false;
+		}
+
+	}
+
+	return true;
+}
+
 
 
 
@@ -344,135 +561,96 @@ int chess() {
 
 	}
 
-	//initializing rook
-	board->at(0, 0).color = C_WHITE;
-	board->at(0, 0).type = ROOK;
-	board->at(7, 0).color = C_BLACK;
-	board->at(7, 0).type = ROOK;
-	board->at(0, 7).color = C_WHITE;
-	board->at(0, 7).type = ROOK;
-	board->at(7, 7).color = C_BLACK;
-	board->at(7, 7).type = ROOK;
-	
-	//initializing knight
-	board->at(0, 1).color = C_WHITE;
-	board->at(0, 1).type = KNIGHT;
-	board->at(7, 1).color = C_BLACK;
-	board->at(7, 1).type = KNIGHT;
-	board->at(0, 6).color = C_WHITE;
-	board->at(0, 6).type = KNIGHT;
-	board->at(7, 6).color = C_BLACK;
-	board->at(7, 6).type = KNIGHT;
-	
-	//initializing bishop
-	board->at(0, 2).color = C_WHITE;
-	board->at(0, 2).type = BISHOP;
-	board->at(7, 2).color = C_BLACK;
-	board->at(7, 2).type = BISHOP;
-	board->at(0, 5).color = C_WHITE;
-	board->at(0, 5).type = BISHOP;
-	board->at(7, 5).color = C_BLACK;
-	board->at(7, 5).type = BISHOP;
-	
-	//initializing queen
-	board->at(0, 3).color = C_WHITE;
-	board->at(0, 3).type = QUEEN;
-	board->at(7, 3).color = C_BLACK;
-	board->at(7, 3).type = QUEEN;
-
-	//Initializing king
-	board->at(0, 4).color = C_WHITE;
-	board->at(0, 4).type = KING;
-	board->at(7, 4).color = C_BLACK;
-	board->at(7, 4).type = KING;
-
+	fillBoard(*board, defaultBoardCond);
+	fillBoard(*board, oneShotCheck);
 	Pos select;
 	Pos move;
 	select.row = -1;
 	select.col = -1;
 	move.row = -1;
 	move.col = -1;
-	bool isCheck = false;
+
 	Content currplayer = C_WHITE;
-	std::set<Pos> whites;
-	std::set<Pos> blacks;
-
-	for (int col = 0; col < 8; ++col) {
-		Pos p;
-		p.col = col;
-		p.row = 0;
-		whites.insert(p);
-		p.row = 1;
-		whites.insert(p);
-
-		p.row = 6;
-		blacks.insert(p);
-		p.row = 7;
-		blacks.insert(p);
-	}
 
 	std::string movemessage = "";
-	size_t aiFails = 0;
+	std::vector<Pos> moves;
+
 	while (!WindowShouldClose()) {
 		std::string sout = "";
 
-		std::vector<Pos> moves;
-		//sets set of current and opposing player cells
-		auto& curr = (currplayer == C_WHITE) ? whites : blacks;
-		auto& opps = (currplayer == C_BLACK) ? whites : blacks;
-
-
 		moves.clear();
+		auto curr = board->getCells(currplayer);
+		auto opps = board->getCells((currplayer == C_WHITE) ? C_BLACK : C_WHITE);
 		if (currplayer == C_BLACK && isAI) {
-
 			//Gets number of pieces still on board
 			size_t size = curr.size();
-
-			//Gets a random choice among available pieces
-			size_t choice = GetRandomValue(0, size - 1);
 			
-			//Part that iterates and receives the choice
-			auto  x = curr.begin();
-			for (int i = 0; i < choice; ++i)
-				++x;
-			std::set<Pos> moves;
+			//Gets and stores all possible moves in a vector of vectors
+			//I know, a dumb style, but didn't want to do much work really
+			//must find a better storage friendly and cpu time friendly method soon
+			std::vector<std::vector<Pos>> currmoves;
+			for (auto& x : curr)
+				currmoves.push_back(board->getmoves(x));
 
-			//sets all possible moves of that pieces in moves set
-			for (auto m : board->getmoves(*x))
-				moves.insert(m);
 
-			//Position of enemy??
-			size_t enemypos = 0;
 
-			//set of all places the enemy has eyes on
-			std::set<Pos> allEnemies;
+			while (currmoves.size() != 0) {
+				//Gets a random choice among available pieces
+				size_t choice = GetRandomValue(0, currmoves.size() - 1);
 
-			//Part that fills the set where all possible enemy moves are stored
-			for (auto m : opps) {
-				for (auto y : board->getmoves(m)) {
-					allEnemies.insert(y);
-				}
-			}
-			//Erases those positions from moves set that are already in enemy target
-			//Try erasing only if all are not covered
-			if(aiFails > curr.size())
-				for (auto m : allEnemies) {
-					moves.erase(m);
+				auto& tmp = currmoves.at(choice);
+
+				if (tmp.size() == 0) {
+					currmoves.erase(currmoves.begin() + choice);
+					continue;
 				}
 
-			//select one of the choices from enemy moves
-			select = *x;
-			if (moves.size() > 0) {
-				x = moves.begin();
-				choice = GetRandomValue(0, moves.size() - 1);
-				for (int i = 0; i < choice; ++i)
-					++x;
+				size_t n_move = GetRandomValue(0, tmp.size() - 1);
+				if (board->trymove(curr.at(choice), currmoves.at(choice).at(n_move))) {
+					select = curr.at(choice);
+					move = currmoves.at(choice).at(n_move);
+					break;
 
-				move = *x;
+				}
+				else {
+					tmp.erase(tmp.begin() + n_move);
+
+				}
+
 			}
-			else {
-				++aiFails;
-			}
+
+			////Position of enemy??
+			//size_t enemypos = 0;
+
+			////set of all places the enemy has eyes on
+			//std::set<Pos> allEnemies;
+
+			////Part that fills the set where all possible enemy moves are stored
+			//for (auto m : opps) {
+			//	for (auto y : board->getmoves(m)) {
+			//		allEnemies.insert(y);
+			//	}
+			//}
+			////Erases those positions from moves set that are already in enemy target
+			////Try erasing only if all are not covered
+			//if(aiFails > curr.size())
+			//	for (auto m : allEnemies) {
+			//		moves.erase(m);
+			//	}
+
+			////select one of the choices from enemy moves
+			//select = *x;
+			//if (moves.size() > 0) {
+			//	x = moves.begin();
+			//	choice = GetRandomValue(0, moves.size() - 1);
+			//	for (int i = 0; i < choice; ++i)
+			//		++x;
+
+			//	move = *x;
+			//}
+			//else {
+			//	++aiFails;
+			//}
 
 
 		}
@@ -490,7 +668,7 @@ int chess() {
 
 					//If a cell is already selected
 					if (select.row >= 0 && select.col >= 0) {
-
+						 
 						//If clicked on selected cell , unselect
 						if (select.row == r && select.col == c) {
 							select.row = -1;
@@ -525,40 +703,31 @@ int chess() {
 		}
 		//If movable then move it, try catch block will manage if not movable
 		try {
-			moves = board->getmoves(select);
-			Cell& src = board->at(select.row, select.col);
-			Cell& des = board->at(move.row, move.col);
-
-			curr.erase(select);
-			if (des.color != C_BLANK)
-				opps.erase(move);
-			curr.insert(move);
-
-			des = src;
-			src.type = NONE;
-			src.color = C_BLANK;
-
-			//Check for check to enemy king
-			auto newMoves = board->getmoves(move);
-			auto enemyCol = ((board->at(move.row, move.col).color == C_WHITE) ? C_BLACK : C_WHITE);
-			isCheck = false;
-			for (auto& c : newMoves) {
-				if (board->at(c.row, c.col).color == enemyCol && board->at(c.row, c.col).type == KING) {
-					isCheck = true;
-					break;
+			auto tmpmoves = board->getmoves(select);
+			moves.clear();
+			for (auto x:tmpmoves) {
+				if (board->trymove(select, x)) {
+					moves.push_back(x);
 				}
 			}
+			if (board->trymove(select, move)) {
+				board->move(select, move);
 
-			movemessage = char('A' + select.col) + std::to_string(select.row+1) + " -> " + char('A' + move.col)  + std::to_string(move.row+1);
+				currplayer = (currplayer == C_WHITE) ? C_BLACK : C_WHITE;
+				select.row = -1;
+				select.col = -1;
+				move.row = -1;
+				move.col = -1;
+			}
+			else {
 
-
+			}
+		}
+		catch (...) {
 			select.row = -1;
 			select.col = -1;
 			move.row = -1;
 			move.col = -1;
-			currplayer = (currplayer == C_WHITE) ? C_BLACK : C_WHITE;
-		}
-		catch (...) {
 
 		}
 
@@ -586,7 +755,7 @@ int chess() {
 			tmp.a = 170;
 			DrawCell::draw(c.row, c.col, tmp);
 		}
-		if (isCheck) {
+		if (((currplayer == C_WHITE) ? board->whiteCheck : board->blackCheck)) {
 			sout += "CHECK ";
 		}
 		DrawText(sout.c_str(), contBorder + border, size + contBorder + border, cellSize/3, RED);

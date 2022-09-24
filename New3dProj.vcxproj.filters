@@ -21,6 +21,9 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="mouseStuff.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="emfield.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
