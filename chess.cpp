@@ -4,7 +4,7 @@
 #include <vector>
 #include <utility>
 #include <functional>
-#include <set>
+#include <algorithm>
 
 enum Piece {
 	PAWN,
@@ -88,6 +88,8 @@ public:
 		return c;
 
 	}
+
+	//TODO make a weight calculator 
 
 	//Previously set as a std::set, probably for particular order of the pieces 
 	std::vector<Pos> getCells(Content color) {
@@ -585,6 +587,7 @@ public:
 
 };
 
+
 int chess() {
 
 	Board masterBoard;
@@ -597,8 +600,9 @@ int chess() {
 	bool isselect = false;
 	bool ismove = false;
 	bool iswhite = true;
-	bool isai = false;
+	bool isai = true;
 	bool isaiwhite = false;
+	bool gameover = false;
 
 	//Selection row and column
 	unsigned selrow = -1;
@@ -626,10 +630,62 @@ int chess() {
 	auto isInRec = CheckCollisionPointRec;
 	
 
+	//An ai for selecting next moving row and column
+	//Design for moving in a separate thread as much as possible
+
+	auto aithingy = [&]() {
+		if (isai && (isaiwhite == iswhite)) {
+
+			auto cells = masterBoard.getCells((iswhite) ? C_WHITE : C_BLACK);
+
+			std::vector<std::pair<float,std::pair<Pos, Pos>>> moves;
+
+			for (auto c : cells) {
+				auto ms = masterBoard.getmoves(c);
+				for (auto m : ms) {
+					if (masterBoard.trymove(c, m)) {
+						std::pair<Pos, Pos> p;
+						p.first = c;
+						p.second = m;
+						std::pair<int, std::pair<Pos, Pos>> fp;
+						Board tmp = masterBoard;
+						tmp.move(c, m);
+						fp.first = tmp.getcolcount((iswhite) ? C_WHITE : C_BLACK) - tmp.getcolcount((iswhite) ? C_BLACK : C_WHITE);
+						fp.second = p;
+						moves.push_back(fp);
+					}
+				}
+			}
+
+			std::sort(moves.begin(), moves.end(), [](std::pair<float, std::pair<Pos, Pos>>& a, std::pair<float, std::pair<Pos, Pos>>& b)->bool {
+				return a.first > b.first;
+
+				});
+
+			if (moves.size() > 0) {
+
+				//count highest only
+				
+				int max = 0;
+				while ((max < moves.size()) && (moves.at(max).first == moves.at(0).first))
+					++max;
+
+				auto res = GetRandomValue(0, max-1);
+				selrow = moves.at(res).second.first.row;
+				selcol = moves.at(res).second.first.col;
+				movrow = moves.at(res).second.second.row;
+				movcol = moves.at(res).second.second.col;
+				isselect = true;
+				ismove = true;
+			}
+
+		}
+	};
+
 	while (!WindowShouldClose()) {
 
 		//Clickity stuff works iff not ai and not ai's turn if it is
-		if (!isai || (isaiwhite == iswhite)) {
+		if (!isai || (isai && (isaiwhite != iswhite))) {
 
 			//Maybe in future when extra buttons have to be added some of clicky stuff should be outside
 
@@ -678,7 +734,7 @@ int chess() {
 		}
 		//if ai's turn then do ai stuff
 		else {
-
+			aithingy();
 		}
 
 		//Selection validation
@@ -710,7 +766,9 @@ int chess() {
 						iswhite = !iswhite;
 					}
 					else {
+
 						//If not a possible move and it is dumb human's turn then make the move location the new select location
+						//TODO : this is prolly not working , fix it
 						if (!isai || (isaiwhite == iswhite)) {
 							selcol = movcol;
 							selrow = movrow;
