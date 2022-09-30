@@ -139,6 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="cards.cpp" />
     <ClCompile Include="chess.cpp" />
     <ClCompile Include="emfield.cpp" />
     <ClCompile Include="main.cpp" />

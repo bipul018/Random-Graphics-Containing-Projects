@@ -32,6 +32,20 @@ struct Pos {
 	bool operator <(Pos b)const {
 		return ((row * 8 + col) < (b.row * 8 + b.col));
 	}
+
+	//Provide interchangeability between Pos and Vector2
+	operator Vector2() {
+		Vector2 vec;
+		vec.x = row;
+		vec.y = col;
+		return vec;
+	}
+	Pos(){}
+	Pos(const Vector2& vec) {
+		row = vec.x;
+		col = vec.y;
+	}
+
 };
 
 struct Cell {
@@ -419,6 +433,26 @@ public:
 		throw "No can do this move, not possible at all.";
 	}
 
+	//Returns box (row, col) of chess box on screen based on position on screen
+	static Pos pos2box(unsigned xpos, unsigned ypos) {
+
+		Pos res;
+		if (xpos > 8 || ypos > 8)
+			throw "Invalid xpos ypos";
+		res.row = 8 - ypos - 1;
+		res.col = xpos;
+		return res;
+	}
+	//Returns positoin on screen ( xpos, ypos) based on row col of box 
+	static Vector2 box2pos(unsigned row, unsigned col) {
+
+		Vector2 res = { 0 };
+		if (row > 8 || col > 8)
+			throw "Invalid row col";
+		res.x = col;
+		res.y = 8 - row - 1;
+		return res;
+	}
 };
 
 //Mechanism to read board condition from string
@@ -501,18 +535,23 @@ bool fillBoard(Board& board, const char* filler) {
 
 
 
-constexpr int size = 800;
-float cellSize = size / 8.0;
-float padding = 0.1 * cellSize;
-float border = padding / 2;
-float contSize = cellSize - (padding + border) * 2;
-float contBorder = contSize * 0.1;
-
-
-
 class DrawCell {
 public:
-	static void draw(int row, int col, Color box, Color letter) {
+
+	DrawCell(int boardSize = 800,float xpos=0,float ypos=0) {
+		posx = xpos;
+		posy = ypos;
+		board = nullptr;
+		size = boardSize;
+		cellSize = size / 8.0;
+		padding = 0.1 * cellSize;
+		border = padding / 2;
+		contSize = cellSize - (padding + border) * 2;
+		contBorder = contSize * 0.1;
+
+	}
+
+	void operator() (int row, int col, Color box, Color letter) {
 
 		DrawRectangle(col * cellSize, (8 - row - 1) * cellSize, cellSize, cellSize, box);
 		DrawText(names[board->at(row, col).type],
@@ -520,251 +559,189 @@ public:
 			(8 - row - 1) * cellSize + padding + border + contBorder,
 			contSize - contBorder * 2, letter);
 	}
-	static void draw(int row, int col, Color box) {
-		draw(row, col, box, (board->at(row, col).color == C_WHITE) ? WHITE : ((board->at(row, col).color == C_BLACK) ? BLACK : BLANK));
+	void operator () (int row, int col, Color box) {
+		(*this)(row, col, box, (board->at(row, col).color == C_WHITE) ? WHITE : ((board->at(row, col).color == C_BLACK) ? BLACK : BLANK));
 	}
-	static void draw(int row, int col) {
-		draw(row, col, ((row + col) % 2) ? LIGHTGRAY : DARKGRAY);
+	void operator() (int row, int col) {
+		(*this)(row, col, ((row + col) % 2) ? LIGHTGRAY : DARKGRAY);
 	}
-	static Board* board;
+	void operator() () {
+		for (int r = 0; r < 8; ++r)
+			for (int c = 0; c < 8; ++c)
+				(*this)(r, c);
+	}
+
+	Board* board;
+	float posx;
+	float posy;
+	float size;
+	float cellSize;
+	float padding;
+	float border;
+	float contSize;
+	float contBorder;
+
+
+
 };
-Board* DrawCell::board = nullptr;
 
 int chess() {
 
-	std::cout << "Enter one of following character \n  vs human : h || vs computer : c";
-	char ch;
-	std::cin >> ch;
+	Board masterBoard;
+	DrawCell cellpaint(900);
+	cellpaint.board = &masterBoard;
 
-	bool isAI = (ch != 'h');
+	fillBoard(masterBoard, defaultBoardCond);
+
+	//Game flags , sorry for using plain old bools now
+	bool isselect = false;
+	bool ismove = false;
+	bool iswhite = true;
+	bool isai = false;
+	bool isaiwhite = false;
+
+	//Selection row and column
+	unsigned selrow = -1;
+	unsigned selcol = -1;
+	unsigned movrow = -1;
+	unsigned movcol = -1;
 
 
-	InitWindow(size, size*1.1, "Sudoku");
-	SetTargetFPS(60);
+	InitWindow(900, 1000, "Chess");
+	SetTargetFPS(90);
 
-	Board* board = new Board;
+	Rectangle winrec;
+	Rectangle chessrec;
+	winrec.x = 0;
+	winrec.y = 0;
+	winrec.width = 900;
+	winrec.height = 1000;
+	chessrec.width = cellpaint.size;
+	chessrec.height = cellpaint.size;
+	chessrec.x = cellpaint.posx;
+	chessrec.y = cellpaint.posy;
+	
 
-	DrawCell::board = board;
-
-	for (auto& c : *board) {
-		c.color = C_BLANK;
-		c.type = NONE;
-	}
-
-
-	for (int col = 0; col < 8; ++col) {
-		board->at(1, col).color = C_WHITE;
-		board->at(1, col).type = PAWN;
-
-		board->at(6, col).color = C_BLACK;
-		board->at(6, col).type = PAWN;
-
-	}
-
-	fillBoard(*board, defaultBoardCond);
-	fillBoard(*board, oneShotCheck);
-	Pos select;
-	Pos move;
-	select.row = -1;
-	select.col = -1;
-	move.row = -1;
-	move.col = -1;
-
-	Content currplayer = C_WHITE;
-
-	std::string movemessage = "";
-	std::vector<Pos> moves;
+	//function alias only
+	auto isInRec = CheckCollisionPointRec;
+	
 
 	while (!WindowShouldClose()) {
-		std::string sout = "";
 
-		moves.clear();
-		auto curr = board->getCells(currplayer);
-		auto opps = board->getCells((currplayer == C_WHITE) ? C_BLACK : C_WHITE);
-		if (currplayer == C_BLACK && isAI) {
-			//Gets number of pieces still on board
-			size_t size = curr.size();
-			
-			//Gets and stores all possible moves in a vector of vectors
-			//I know, a dumb style, but didn't want to do much work really
-			//must find a better storage friendly and cpu time friendly method soon
-			std::vector<std::vector<Pos>> currmoves;
-			for (auto& x : curr)
-				currmoves.push_back(board->getmoves(x));
+		//Clickity stuff works iff not ai and not ai's turn if it is
+		if (!isai || (isaiwhite == iswhite)) {
 
+			//Maybe in future when extra buttons have to be added some of clicky stuff should be outside
 
+			//If user's turn then check if click has occured
+			if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+				Vector2 mousepos = GetMousePosition();
 
-			while (currmoves.size() != 0) {
-				//Gets a random choice among available pieces
-				size_t choice = GetRandomValue(0, currmoves.size() - 1);
+				//Check if mouse is in rectangle
+				if (isInRec(mousepos, winrec)) {
 
-				auto& tmp = currmoves.at(choice);
+					//If mouse click is inside the chessboard area then do more stuff
+					//Be wary , this section doesnot check the validity of moves, that is done in other sections
+					if (isInRec(mousepos, chessrec)) {
 
-				if (tmp.size() == 0) {
-					currmoves.erase(currmoves.begin() + choice);
-					continue;
-				}
+						int x = (mousepos.x - chessrec.x) / (cellpaint.cellSize);
+						int y = (mousepos.y - chessrec.y) / (cellpaint.cellSize);
+						Pos rowcol = Board::pos2box(x, y);
 
-				size_t n_move = GetRandomValue(0, tmp.size() - 1);
-				if (board->trymove(curr.at(choice), currmoves.at(choice).at(n_move))) {
-					select = curr.at(choice);
-					move = currmoves.at(choice).at(n_move);
-					break;
+						if (!isselect) {
 
-				}
-				else {
-					tmp.erase(tmp.begin() + n_move);
-
-				}
-
-			}
-
-			////Position of enemy??
-			//size_t enemypos = 0;
-
-			////set of all places the enemy has eyes on
-			//std::set<Pos> allEnemies;
-
-			////Part that fills the set where all possible enemy moves are stored
-			//for (auto m : opps) {
-			//	for (auto y : board->getmoves(m)) {
-			//		allEnemies.insert(y);
-			//	}
-			//}
-			////Erases those positions from moves set that are already in enemy target
-			////Try erasing only if all are not covered
-			//if(aiFails > curr.size())
-			//	for (auto m : allEnemies) {
-			//		moves.erase(m);
-			//	}
-
-			////select one of the choices from enemy moves
-			//select = *x;
-			//if (moves.size() > 0) {
-			//	x = moves.begin();
-			//	choice = GetRandomValue(0, moves.size() - 1);
-			//	for (int i = 0; i < choice; ++i)
-			//		++x;
-
-			//	move = *x;
-			//}
-			//else {
-			//	++aiFails;
-			//}
-
-
-		}
-		else {
-
-			if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || (GetTouchPointCount()>0)) {
-				auto pos = GetMousePosition();
-				if (GetTouchPointCount() > 0) {
-					pos = GetTouchPosition(0);
-				}
-				if (pos.x >= 0 && pos.x < size && pos.y >= 0 && pos.y < size) {
-					int r = pos.y / cellSize;
-					int c = pos.x / cellSize;
-					r = 8 - r - 1;
-
-					//If a cell is already selected
-					if (select.row >= 0 && select.col >= 0) {
-						 
-						//If clicked on selected cell , unselect
-						if (select.row == r && select.col == c) {
-							select.row = -1;
-							select.col = -1;
+							selcol = rowcol.col;
+							selrow = rowcol.row;
+							isselect = true;
 						}
 						else {
-							move.row = -1;
-							move.col = -1;
-							//if selected in one of valid moves , set moving to that cell
-							moves = board->getmoves(select);
-							for (auto& s : moves) {
-								if (r == s.row && c == s.col) {
-									move = s;
-									break;
-								}
+
+							//if already selected , unselect , else ready for move
+							if ((selcol == rowcol.col) && (selrow == rowcol.row))
+								isselect = false;
+							else {
+								ismove = true;
+								movrow = rowcol.row;
+								movcol = rowcol.col;
 							}
-							//if not selected in any of valid moves , 
-							if ((move.row < 0 || move.col < 0) && (board->at(r, c).color == currplayer)) {
-								select.row = r;
-								select.col = c;
-							}
+
+
 						}
 
+
 					}
-					else if (board->at(r, c).color == currplayer) {
-						select.row = r;
-						select.col = c;
-					}
+
+
 
 				}
 			}
 		}
-		//If movable then move it, try catch block will manage if not movable
-		try {
-			auto tmpmoves = board->getmoves(select);
-			moves.clear();
-			for (auto x:tmpmoves) {
-				if (board->trymove(select, x)) {
-					moves.push_back(x);
-				}
-			}
-			if (board->trymove(select, move)) {
-				board->move(select, move);
+		//if ai's turn then do ai stuff
+		else {
 
-				currplayer = (currplayer == C_WHITE) ? C_BLACK : C_WHITE;
-				select.row = -1;
-				select.col = -1;
-				move.row = -1;
-				move.col = -1;
+		}
+
+		//Selection validation
+		if (isselect) {
+
+			//If not turn then deselect 
+			if ((iswhite && (masterBoard.at(selrow, selcol).color != C_WHITE)) ||
+				(!iswhite && (masterBoard.at(selrow, selcol).color != C_BLACK))) {
+
+				isselect = false;
+
 			}
 			else {
 
+
+				//Now move validation and stuff
+				if (ismove) {
+					Pos from;
+					from.row = selrow;
+					from.col = selcol;
+
+					Pos to;
+					to.row = movrow;
+					to.col = movcol;
+
+					if (masterBoard.trymove(from, to)) {
+						masterBoard.move(from, to);
+						isselect = false;
+						iswhite = !iswhite;
+					}
+					else {
+						//If not a possible move and it is dumb human's turn then make the move location the new select location
+						if (!isai || (isaiwhite == iswhite)) {
+							selcol = movcol;
+							selrow = movrow;
+						}
+					}
+					ismove = false;
+				}
 			}
 		}
-		catch (...) {
-			select.row = -1;
-			select.col = -1;
-			move.row = -1;
-			move.col = -1;
-
-		}
-
-
-		ClearBackground(LIGHTGRAY);
+		
+		ClearBackground(GRAY);
 		BeginDrawing();
-		for (int row = 0; row < 8; ++row)
-			for (int col = 0; col < 8; ++col) {
-				if (row != select.row || col != select.col)
-					DrawCell::draw(row, col);
-				else
-					DrawCell::draw(row, col, BLUE);
+		for (int i = 0; i < 8; ++i)
+			for (int j = 0; j < 8; ++j)
+				cellpaint(i, j);
+
+		if (isselect) {
+			cellpaint(selrow, selcol, YELLOW);
+
+			auto colors = masterBoard.getmoves(selrow, selcol);
+			for (auto& to : colors) {
+				Pos from;
+				from.row = selrow;
+				from.col = selcol;
+				if (masterBoard.trymove(from, to))
+					cellpaint(to.row, to.col, SKYBLUE);
 			}
 
-		sout += "PLAYER : " + std::string(((currplayer == C_WHITE) ? "WHITE " : "BLACK "));
-
-		for (auto c : curr) {
-			Color tmp = YELLOW;
-			tmp.a = 150;
-			DrawCell::draw(c.row, c.col, tmp);
 		}
-
-		for (auto& c : moves) {
-			Color tmp = SKYBLUE;
-			tmp.a = 170;
-			DrawCell::draw(c.row, c.col, tmp);
-		}
-		if (((currplayer == C_WHITE) ? board->whiteCheck : board->blackCheck)) {
-			sout += "CHECK ";
-		}
-		DrawText(sout.c_str(), contBorder + border, size + contBorder + border, cellSize/3, RED);
-		DrawText(movemessage.c_str(), contBorder + border, size + contBorder + border + cellSize /3, cellSize/3, RED);
-
-
 		EndDrawing();
 	}
-	delete board;
+
 	return 0;
 }
- 
