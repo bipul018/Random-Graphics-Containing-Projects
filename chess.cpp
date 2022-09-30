@@ -89,8 +89,21 @@ public:
 
 	}
 
-	//TODO make a weight calculator 
+	//calculates a wt favourale for white 
+	float getwt() {
+		//for now just assign the wt as per they are arranged in enum + 1
 
+		float netwt = 0.0;
+		for (auto& c : (std::array<Cell, 8 * 8>)(*this)) {
+			if (c.color == C_WHITE)
+				netwt += c.type + 1;
+			if (c.color == C_BLACK)
+				netwt -= c.type + 1;
+
+		}
+		return netwt;
+
+	}
 	//Previously set as a std::set, probably for particular order of the pieces 
 	std::vector<Pos> getCells(Content color) {
 
@@ -471,15 +484,15 @@ PPPPPPPP\
 pppppppp\
 rhbqkbhr\
 ";
-const char oneShotCheck[] = "\
+const char pracBoard[] = "\
 RHBQKBHR\
-PP-PPq-P\
+PP-PP--P\
 -----PP-\
 --P-----\
---------\
+-b-q----\
 --p-p---\
 pp-p-ppp\
-rhb-kbhr\
+rh--kbhr\
 ";
 
 bool fillBoard(Board& board, const char* filler) {
@@ -595,7 +608,7 @@ int chess() {
 	cellpaint.board = &masterBoard;
 
 	fillBoard(masterBoard, defaultBoardCond);
-
+	fillBoard(masterBoard, pracBoard);
 	//Game flags , sorry for using plain old bools now
 	bool isselect = false;
 	bool ismove = false;
@@ -650,7 +663,9 @@ int chess() {
 						std::pair<int, std::pair<Pos, Pos>> fp;
 						Board tmp = masterBoard;
 						tmp.move(c, m);
-						fp.first = tmp.getcolcount((iswhite) ? C_WHITE : C_BLACK) - tmp.getcolcount((iswhite) ? C_BLACK : C_WHITE);
+						fp.first = tmp.getwt();
+						if (!isaiwhite)
+							fp.first = -fp.first;
 						fp.second = p;
 						moves.push_back(fp);
 					}
