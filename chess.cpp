@@ -5,19 +5,20 @@
 #include <utility>
 #include <functional>
 #include <algorithm>
+#include <thread>
 
 enum Piece {
 	PAWN,
-	ROOK,
-	KNIGHT,
 	BISHOP,
+	KNIGHT,
+	ROOK,
 	QUEEN,
 	KING,
 	NONE
 };
 
 const char* names[] = {
-	"P","R","H","B","Q","K",""
+	"P","B","H","R","Q","K",""
 };
 
 enum Content {
@@ -371,7 +372,27 @@ public:
 
 	}
 
+	//first tries to move , if fail returns false , else moves and returns true
+	bool tryNmove(Pos from, Pos to) {
+		Cell fcell = at(from);
+		Cell tcell = at(to);
+		try {
+			move(from, to);
+		}
+		catch (...) {
+			return false;
+		}
+
+		if (((at(from).color == C_BLACK) && (blackCheck)) || ((at(from).color == C_WHITE) && (whiteCheck))) {
+			at(from) = fcell;
+			at(to) = tcell;
+			return false;
+		}
+		return true;
+	}
+
 	//throws exception if move fails, returns true if eaten or smthing, I have not decided yet
+	//this moves nonetheless if piece is there
 	bool move(Pos from, Pos to) {
 
 		Cell& src = at(from.row, from.col);
@@ -485,14 +506,14 @@ pppppppp\
 rhbqkbhr\
 ";
 const char pracBoard[] = "\
-RHBQKBHR\
-PP-PP--P\
------PP-\
---P-----\
--b-q----\
---p-p---\
-pp-p-ppp\
-rh--kbhr\
+RHQ--BHR\
+----P-P-\
+-P-P-K--\
+PhP---hP\
+p-p-pb-p\
+---q-p--\
+------p-\
+r---kb-r\
 ";
 
 bool fillBoard(Board& board, const char* filler) {
@@ -600,6 +621,85 @@ public:
 
 };
 
+//This is an object for evaluating using ai, for some reason lamda couldn't do it , so here it is
+class AIeval {
+public:
+	Board& masterBoard;
+	int depth = 0;
+	bool isaiwhite = true;
+	unsigned* selrow = nullptr;
+	unsigned* selcol = nullptr;
+	unsigned* movrow = nullptr;
+	unsigned* movcol = nullptr;
+
+	AIeval(Board& board):masterBoard(board){}
+
+	//An ai for selecting next moving row and column
+	//Design for moving in a separate thread as much as possible
+
+	//For now a minmax algorithm only, plss update this to a better weighted algorithm
+	float evaluate() {
+		totalevals++;
+		auto cells = masterBoard.getCells((isaiwhite) ? C_WHITE : C_BLACK);
+
+		std::vector<std::pair<float, std::pair<Pos, Pos>>> moves;
+
+		for (auto c : cells) {
+			auto ms = masterBoard.getmoves(c);
+			Board tmp = masterBoard;
+			for (auto m : ms) {
+				if (tmp.tryNmove(c, m)) {
+					std::pair<Pos, Pos> p;
+					p.first = c;
+					p.second = m;
+					std::pair<int, std::pair<Pos, Pos>> fp;
+					if (depth > 0) {
+						AIeval *aiunit = new AIeval(tmp);
+						aiunit->depth = depth - 1;
+						aiunit->isaiwhite = !isaiwhite;
+						fp.first = -aiunit->evaluate();
+						delete aiunit;
+					}
+					else {
+						fp.first = tmp.getwt();
+
+						if (!isaiwhite)
+							fp.first = -fp.first;
+					}
+					fp.second = p;
+					moves.push_back(fp);
+					tmp = masterBoard;
+				}
+			}
+		}
+
+		std::sort(moves.begin(), moves.end(), [](std::pair<float, std::pair<Pos, Pos>>& a, std::pair<float, std::pair<Pos, Pos>>& b)->bool {
+			return a.first > b.first;
+
+			});
+
+		if (moves.size() > 0) {
+
+			//count highest only
+
+			int max = 0;
+			while ((max < moves.size()) && (moves.at(max).first == moves.at(0).first))
+				++max;
+
+			auto res = GetRandomValue(0, max - 1);
+			if(selrow != nullptr && selcol != nullptr && movrow != nullptr && movcol != nullptr) {
+				*selrow = moves.at(res).second.first.row;
+				*selcol = moves.at(res).second.first.col;
+				*movrow = moves.at(res).second.second.row;
+				*movcol = moves.at(res).second.second.col;
+			}
+			return moves.at(0).first;
+		}
+		throw "NO MOVES LEFT";
+	}
+	static int totalevals;
+};
+int AIeval::totalevals = 0;
 
 int chess() {
 
@@ -624,9 +724,15 @@ int chess() {
 	unsigned movcol = -1;
 
 
+	//Window stuff
 	InitWindow(900, 1000, "Chess");
 	SetTargetFPS(90);
 
+	//timer stuff
+	double prevMoveTime = GetTime();
+	double prevTakenTime = 0;
+
+	//Board area designation stuff
 	Rectangle winrec;
 	Rectangle chessrec;
 	winrec.x = 0;
@@ -641,62 +747,32 @@ int chess() {
 
 	//function alias only
 	auto isInRec = CheckCollisionPointRec;
-	
-
-	//An ai for selecting next moving row and column
-	//Design for moving in a separate thread as much as possible
 
 	auto aithingy = [&]() {
 		if (isai && (isaiwhite == iswhite)) {
 
-			auto cells = masterBoard.getCells((iswhite) ? C_WHITE : C_BLACK);
+			try {
+				AIeval mainai(masterBoard);
+				mainai.depth = 1;
+				mainai.isaiwhite = isaiwhite;
+				mainai.selrow = &selrow;
+				mainai.selcol = &selcol;
+				mainai.movrow = &movrow;
+				mainai.movcol = &movcol;
+				mainai.evaluate();
 
-			std::vector<std::pair<float,std::pair<Pos, Pos>>> moves;
 
-			for (auto c : cells) {
-				auto ms = masterBoard.getmoves(c);
-				for (auto m : ms) {
-					if (masterBoard.trymove(c, m)) {
-						std::pair<Pos, Pos> p;
-						p.first = c;
-						p.second = m;
-						std::pair<int, std::pair<Pos, Pos>> fp;
-						Board tmp = masterBoard;
-						tmp.move(c, m);
-						fp.first = tmp.getwt();
-						if (!isaiwhite)
-							fp.first = -fp.first;
-						fp.second = p;
-						moves.push_back(fp);
-					}
-				}
-			}
-
-			std::sort(moves.begin(), moves.end(), [](std::pair<float, std::pair<Pos, Pos>>& a, std::pair<float, std::pair<Pos, Pos>>& b)->bool {
-				return a.first > b.first;
-
-				});
-
-			if (moves.size() > 0) {
-
-				//count highest only
-				
-				int max = 0;
-				while ((max < moves.size()) && (moves.at(max).first == moves.at(0).first))
-					++max;
-
-				auto res = GetRandomValue(0, max-1);
-				selrow = moves.at(res).second.first.row;
-				selcol = moves.at(res).second.first.col;
-				movrow = moves.at(res).second.second.row;
-				movcol = moves.at(res).second.second.col;
 				isselect = true;
 				ismove = true;
 			}
+			catch (...) {
 
+			}
 		}
 	};
 
+	//ai thread
+	std::thread* aiThrd = nullptr;
 	while (!WindowShouldClose()) {
 
 		//Clickity stuff works iff not ai and not ai's turn if it is
@@ -749,7 +825,10 @@ int chess() {
 		}
 		//if ai's turn then do ai stuff
 		else {
+			//if ai thread not started then start it 
 			aithingy();
+			//if (aiThrd == nullptr)
+			//	aiThrd = new std::thread(aithingy);
 		}
 
 		//Selection validation
@@ -779,17 +858,24 @@ int chess() {
 						masterBoard.move(from, to);
 						isselect = false;
 						iswhite = !iswhite;
+						//reset things after move success
+						prevTakenTime = GetTime() - prevMoveTime;
+						prevMoveTime = GetTime();
 					}
 					else {
 
 						//If not a possible move and it is dumb human's turn then make the move location the new select location
 						//TODO : this is prolly not working , fix it
-						if (!isai || (isaiwhite == iswhite)) {
+						if (!isai || (isaiwhite != iswhite)) {
 							selcol = movcol;
 							selrow = movrow;
 						}
 					}
 					ismove = false;
+					//if ai was runnig ,clear ai thread
+					if (aiThrd != nullptr)
+						delete aiThrd;
+					aiThrd = nullptr;
 				}
 			}
 		}
@@ -813,6 +899,9 @@ int chess() {
 			}
 
 		}
+
+		DrawText(std::to_string(prevTakenTime).c_str(), 0, chessrec.y + chessrec.height, 0.9 * (winrec.height - chessrec.height - chessrec.y), MAROON);
+
 		EndDrawing();
 	}
 
