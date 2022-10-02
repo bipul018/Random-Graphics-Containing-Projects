@@ -5,6 +5,7 @@
 #include <utility>
 #include <functional>
 #include <algorithm>
+#include <chrono>
 #include <thread>
 
 enum Piece {
@@ -62,15 +63,14 @@ public:
 
 	bool blackCheck = false;
 	bool whiteCheck = false;
-
-	Cell& at(int row, int col) {
+	Cell* at(int row, int col) {
 
 		if (row > 7 || row < 0 || col>7 || col < 0)
-			throw "FUCKING OUT OF RANGE";
+			return nullptr;
 
-		return array::at((8 - row - 1) * 8 + col);
+		return &array::at((8 - row - 1) * 8 + col);
 	}
-	Cell& at(Pos ppos) {
+	Cell* at(Pos ppos) {
 		return at(ppos.row, ppos.col);
 	}
 
@@ -91,17 +91,20 @@ public:
 	}
 
 	//calculates a wt favourale for white 
-	float getwt() {
+	//if a colour is provided then count only that colour's wt. always +ve
+	float getwt(Content type = C_BLANK) {
 		//for now just assign the wt as per they are arranged in enum + 1
 
 		float netwt = 0.0;
 		for (auto& c : (std::array<Cell, 8 * 8>)(*this)) {
-			if (c.color == C_WHITE)
+			if ((c.color == C_WHITE)&&(type!=C_BLACK))
 				netwt += c.type + 1;
-			if (c.color == C_BLACK)
+			if ((c.color == C_BLACK)&&(type!=C_WHITE))
 				netwt -= c.type + 1;
 
 		}
+		if (type == C_BLACK)
+			netwt = -netwt;
 		return netwt;
 
 	}
@@ -133,7 +136,7 @@ public:
 
 	std::vector<Pos> getmoves(Pos ppos, Piece forcedType = NONE) {
 
-		auto piece = at(ppos);
+		Cell& piece = *at(ppos);
 
 		std::vector<Pos> moves;
 		moves.clear();
@@ -146,60 +149,52 @@ public:
 				p.col = ppos.col;
 				auto frontrow = ppos.row + ((piece.color == C_WHITE) ? 1 : -1);
 				p.row = frontrow;
-				try {
-					if (at(frontrow, ppos.col).color == C_BLANK) {
+				Cell* ptr = nullptr;
+				{
+					ptr = at(frontrow, ppos.col);
+					if (ptr!=nullptr && ptr->color == C_BLANK) {
 						moves.push_back(p);
-						try {
+						{
 							if (piece.color == C_WHITE && ppos.row == 1) {
-								if (at(3, ppos.col).color == C_BLANK) {
+								ptr = at(3, ppos.col);
+								if (ptr!=nullptr && ptr->color == C_BLANK) {
 									p.row = 3;
 									p.col = ppos.col;
 									moves.push_back(p);
 								}
 							}
 							else if (piece.color == C_BLACK && ppos.row == 6) {
-								if (at(4, ppos.col).color == C_BLANK) {
+								ptr = at(4, ppos.col);
+								if (ptr!=nullptr&&ptr->color == C_BLANK) {
 									p.row = 4;
 									p.col = ppos.col;
 									moves.push_back(p);
 								}
 							}
 						}
-						catch (...) {
-
-						}
 					}
 				}
-				catch (...) {
-				}
-				try {
-					if (at(frontrow, ppos.col + 1).color == compCol) {
+					ptr = at(frontrow, ppos.col + 1);
+					if (ptr!=nullptr && ptr->color == compCol) {
 						p.col = ppos.col + 1;
 						p.row = frontrow;
 						moves.push_back(p);
 					}
-				}
-				catch (...) {
-
-				}
-				try {
-					if (at(frontrow, ppos.col - 1).color == compCol) {
+					ptr = at(frontrow, ppos.col - 1);
+					if (ptr != nullptr && ptr->color == compCol) {
 						p.col = ppos.col - 1;
 						p.row = frontrow;
 						moves.push_back(p);
 					}
-
-				}
-				catch (...) {
-
-				}
 
 
 			};
 
 			//pushes a move if the place is not occupied by friend , returns true it it was empty
 			auto tmpfunc = [&,this](Pos p)->bool {
-				try {
+				if (p.row > 7 || p.col > 7 || p.row < 0 || p.col < 0)
+					return false;
+				//try {
 					if (at(p.row, p.col).color == C_BLANK)
 						moves.push_back(p);
 					else {
@@ -207,10 +202,10 @@ public:
 							moves.push_back(p);
 						return false;
 					}
-				}
-				catch (...) {
-					return false;
-				}
+				//}
+				//catch (...) {
+				//	return false;
+				//}
 				return true;
 			};
 
@@ -383,9 +378,10 @@ public:
 			return false;
 		}
 
-		if (((at(from).color == C_BLACK) && (blackCheck)) || ((at(from).color == C_WHITE) && (whiteCheck))) {
-			at(from) = fcell;
-			at(to) = tcell;
+		
+		if ( ((fcell.color == C_BLACK) && blackCheck) || ((fcell.color == C_WHITE) && (whiteCheck))) {
+			*at(from) = fcell;
+			*at(to) = tcell;
 			return false;
 		}
 		return true;
@@ -506,14 +502,14 @@ pppppppp\
 rhbqkbhr\
 ";
 const char pracBoard[] = "\
-RHQ--BHR\
-----P-P-\
--P-P-K--\
-PhP---hP\
-p-p-pb-p\
----q-p--\
-------p-\
-r---kb-r\
+-----BH-\
+PH--K-P-\
+--RP----\
+-P-QP-pb\
+-pPp----\
+p-p--qh-\
+--rk---R\
+-----p--\
 ";
 
 bool fillBoard(Board& board, const char* filler) {
@@ -657,7 +653,14 @@ public:
 						AIeval *aiunit = new AIeval(tmp);
 						aiunit->depth = depth - 1;
 						aiunit->isaiwhite = !isaiwhite;
-						fp.first = -aiunit->evaluate();
+						try {
+							fp.first = -aiunit->evaluate();
+						}
+						catch (...) {
+							//this is when there are no further moves , in this case there should be high weight to this one
+							//so let's sum weights of the colors of this only and multiply by 2
+							fp.first = tmp.getwt((tmp.at(c).color)) * 2;
+						}
 						delete aiunit;
 					}
 					else {
@@ -708,7 +711,7 @@ int chess() {
 	cellpaint.board = &masterBoard;
 
 	fillBoard(masterBoard, defaultBoardCond);
-	fillBoard(masterBoard, pracBoard);
+	//fillBoard(masterBoard, pracBoard);
 	//Game flags , sorry for using plain old bools now
 	bool isselect = false;
 	bool ismove = false;
@@ -748,31 +751,42 @@ int chess() {
 	//function alias only
 	auto isInRec = CheckCollisionPointRec;
 
+	bool stopAI = false;
+	bool runAI = false;
 	auto aithingy = [&]() {
-		if (isai && (isaiwhite == iswhite)) {
-
-			try {
-				AIeval mainai(masterBoard);
-				mainai.depth = 1;
-				mainai.isaiwhite = isaiwhite;
-				mainai.selrow = &selrow;
-				mainai.selcol = &selcol;
-				mainai.movrow = &movrow;
-				mainai.movcol = &movcol;
-				mainai.evaluate();
-
-
-				isselect = true;
-				ismove = true;
+		//while (!stopAI) {
+			using namespace std::chrono_literals;
+			if (!runAI) {
+				std::this_thread::sleep_for(2ms);
+			//	continue;
 			}
-			catch (...) {
 
+			if (isai && (isaiwhite == iswhite)) {
+
+				try {
+					AIeval mainai(masterBoard);
+					mainai.depth = 2;
+					mainai.isaiwhite = isaiwhite;
+					mainai.selrow = &selrow;
+					mainai.selcol = &selcol;
+					mainai.movrow = &movrow;
+					mainai.movcol = &movcol;
+					mainai.evaluate();
+
+
+					isselect = true;
+					ismove = true;
+				}
+				catch (...) {
+					int kk = 3;
+				}
 			}
-		}
+			//runAI = false;
+		//}
 	};
 
 	//ai thread
-	std::thread* aiThrd = nullptr;
+	//std::thread aiThrd(aithingy);
 	while (!WindowShouldClose()) {
 
 		//Clickity stuff works iff not ai and not ai's turn if it is
@@ -872,10 +886,6 @@ int chess() {
 						}
 					}
 					ismove = false;
-					//if ai was runnig ,clear ai thread
-					if (aiThrd != nullptr)
-						delete aiThrd;
-					aiThrd = nullptr;
 				}
 			}
 		}
