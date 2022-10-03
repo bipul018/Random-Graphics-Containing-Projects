@@ -81,7 +81,7 @@ public:
 				Pos p;
 				p.row = row;
 				p.col = col;
-				if (at(p).color == color)
+				if (at(p)->color == color)
 					++c;
 
 			}
@@ -119,7 +119,7 @@ public:
 				Pos p;
 				p.row = row;
 				p.col = col;
-				if (at(p).color == color)
+				if (at(p)->color == color)
 					cells.push_back(p);
 
 			}
@@ -136,9 +136,12 @@ public:
 
 	std::vector<Pos> getmoves(Pos ppos, Piece forcedType = NONE) {
 
-		Cell& piece = *at(ppos);
-
+		Cell *pieceptr = at(ppos);
 		std::vector<Pos> moves;
+
+		if (pieceptr == nullptr)
+			return moves;
+		Cell& piece = *pieceptr;
 		moves.clear();
 		if (piece.color != C_BLANK) {
 
@@ -174,6 +177,7 @@ public:
 						}
 					}
 				}
+				//TODO: gonna have to check for program control along with converting all at() fns to pointer version
 					ptr = at(frontrow, ppos.col + 1);
 					if (ptr!=nullptr && ptr->color == compCol) {
 						p.col = ppos.col + 1;
@@ -192,20 +196,14 @@ public:
 
 			//pushes a move if the place is not occupied by friend , returns true it it was empty
 			auto tmpfunc = [&,this](Pos p)->bool {
-				if (p.row > 7 || p.col > 7 || p.row < 0 || p.col < 0)
-					return false;
-				//try {
-					if (at(p.row, p.col).color == C_BLANK)
+				Cell* ptr = at(p.row, p.col);
+					if (ptr!=nullptr && ptr->color == C_BLANK)
 						moves.push_back(p);
 					else {
-						if (at(p.row, p.col).color == compCol)
+						if (ptr != nullptr && ptr->color == compCol)
 							moves.push_back(p);
 						return false;
 					}
-				//}
-				//catch (...) {
-				//	return false;
-				//}
 				return true;
 			};
 
@@ -350,16 +348,18 @@ public:
 
 		Board tmpboard(*this);
 		try {
-			tmpboard.move(from, to);
+			if (!tmpboard.move(from, to))
+				return false;
 		}
 		catch (...) {
 			return false;
 		}
 
-		if ((at(from).color == C_WHITE) && (tmpboard.whiteCheck)) {
+		//if previous block returns true following statements are guarenteed to work
+		if ((at(from)->color == C_WHITE) && (tmpboard.whiteCheck)) {
 			return false;
 		}
-		if ((at(from).color == C_BLACK) && (tmpboard.blackCheck)) {
+		if ((at(from)->color == C_BLACK) && (tmpboard.blackCheck)) {
 			return false;
 		}
 
@@ -369,31 +369,39 @@ public:
 
 	//first tries to move , if fail returns false , else moves and returns true
 	bool tryNmove(Pos from, Pos to) {
-		Cell fcell = at(from);
-		Cell tcell = at(to);
+		//These won't be nullptr if next move return true
+		Cell *fcell = at(from);
+		Cell *tcell = at(to);
+
 		try {
-			move(from, to);
+			if (!move(from, to))
+				return false;
 		}
 		catch (...) {
 			return false;
 		}
 
 		
-		if ( ((fcell.color == C_BLACK) && blackCheck) || ((fcell.color == C_WHITE) && (whiteCheck))) {
-			*at(from) = fcell;
-			*at(to) = tcell;
+		if ( ((fcell->color == C_BLACK) && blackCheck) || ((fcell->color == C_WHITE) && (whiteCheck))) {
+			*at(from) = *fcell;
+			*at(to) = *tcell;
 			return false;
 		}
 		return true;
 	}
 
-	//throws exception if move fails, returns true if eaten or smthing, I have not decided yet
+	//throws exception if move fails, return false also if move fails , prolly removing this exception throwing condn
 	//this moves nonetheless if piece is there
 	bool move(Pos from, Pos to) {
+		
+		Cell* srcptr = at(from.row, from.col);
+		Cell* desptr = at(to.row, to.col);
 
-		Cell& src = at(from.row, from.col);
-		Cell& des = at(to.row, to.col);
+		if (srcptr == nullptr || desptr == nullptr)
+			return false;
 
+		Cell& src = *srcptr;
+		Cell& des = *desptr;
 		auto srcCol = src.color;
 		if (srcCol == C_BLANK)
 			throw "Cannot move when there's no piece ";
@@ -417,13 +425,13 @@ public:
 				Pos whiteKing; whiteKing.row = -1; whiteKing.col = -1;
 
 				for (auto& x : whites) {
-					if (at(x).type == KING) {
+					if (at(x)->type == KING) {
 						whiteKing = x;
 						break;
 					}
 				}
 				for (auto& x : blacks) {
-					if (at(x).type == KING) {
+					if (at(x)->type == KING) {
 						blackKing = x;
 						break;
 					}
@@ -438,7 +446,7 @@ public:
 					if (!whiteCheck) {
 						auto whiteEater = getmoves(whiteKing, static_cast<Piece>(i));
 						for (auto& x : whiteEater) {
-							if (at(x).type == i) {
+							if (at(x)->type == i) {
 								whiteCheck = true;
 								break;
 							}
@@ -448,7 +456,7 @@ public:
 					if (!blackCheck) {
 						auto blackEater = getmoves(blackKing, static_cast<Piece>(i));
 						for (auto& x : blackEater) {
-							if (at(x).type == i) {
+							if (at(x)->type == i) {
 								blackCheck = true;
 								break;
 							}
@@ -584,15 +592,18 @@ public:
 	}
 
 	void operator() (int row, int col, Color box, Color letter) {
-
+		if (row > 7 || col > 7 || row < 0 || col < 0)
+			throw"Out of range";
 		DrawRectangle(col * cellSize, (8 - row - 1) * cellSize, cellSize, cellSize, box);
-		DrawText(names[board->at(row, col).type],
+		DrawText(names[board->at(row, col)->type],
 			col * cellSize + padding + border + contBorder,
 			(8 - row - 1) * cellSize + padding + border + contBorder,
 			contSize - contBorder * 2, letter);
 	}
 	void operator () (int row, int col, Color box) {
-		(*this)(row, col, box, (board->at(row, col).color == C_WHITE) ? WHITE : ((board->at(row, col).color == C_BLACK) ? BLACK : BLANK));
+		if (row > 7 || col > 7 || row < 0 || col < 0)
+			throw"Out of range";
+		(*this)(row, col, box, (board->at(row, col)->color == C_WHITE) ? WHITE : ((board->at(row, col)->color == C_BLACK) ? BLACK : BLANK));
 	}
 	void operator() (int row, int col) {
 		(*this)(row, col, ((row + col) % 2) ? LIGHTGRAY : DARKGRAY);
@@ -659,7 +670,7 @@ public:
 						catch (...) {
 							//this is when there are no further moves , in this case there should be high weight to this one
 							//so let's sum weights of the colors of this only and multiply by 2
-							fp.first = tmp.getwt((tmp.at(c).color)) * 2;
+							fp.first = tmp.getwt((tmp.at(c)->color)) * 2;
 						}
 						delete aiunit;
 					}
@@ -753,6 +764,8 @@ int chess() {
 
 	bool stopAI = false;
 	bool runAI = false;
+
+	//todo:: somehow ai had the super power to convert king into queen(both enemy and own) ?? gonna have to deug that for sure
 	auto aithingy = [&]() {
 		//while (!stopAI) {
 			using namespace std::chrono_literals;
@@ -765,7 +778,7 @@ int chess() {
 
 				try {
 					AIeval mainai(masterBoard);
-					mainai.depth = 2;
+					mainai.depth = 3;
 					mainai.isaiwhite = isaiwhite;
 					mainai.selrow = &selrow;
 					mainai.selcol = &selcol;
@@ -849,43 +862,46 @@ int chess() {
 		if (isselect) {
 
 			//If not turn then deselect 
-			if ((iswhite && (masterBoard.at(selrow, selcol).color != C_WHITE)) ||
-				(!iswhite && (masterBoard.at(selrow, selcol).color != C_BLACK))) {
 
-				isselect = false;
+			if (masterBoard.at(selrow, selcol) != nullptr) {
+				if ((iswhite && (masterBoard.at(selrow, selcol)->color != C_WHITE)) ||
+					(!iswhite && (masterBoard.at(selrow, selcol)->color != C_BLACK))) {
 
-			}
-			else {
+					isselect = false;
+
+				}
+				else {
 
 
-				//Now move validation and stuff
-				if (ismove) {
-					Pos from;
-					from.row = selrow;
-					from.col = selcol;
+					//Now move validation and stuff
+					if (ismove) {
+						Pos from;
+						from.row = selrow;
+						from.col = selcol;
 
-					Pos to;
-					to.row = movrow;
-					to.col = movcol;
+						Pos to;
+						to.row = movrow;
+						to.col = movcol;
 
-					if (masterBoard.trymove(from, to)) {
-						masterBoard.move(from, to);
-						isselect = false;
-						iswhite = !iswhite;
-						//reset things after move success
-						prevTakenTime = GetTime() - prevMoveTime;
-						prevMoveTime = GetTime();
-					}
-					else {
-
-						//If not a possible move and it is dumb human's turn then make the move location the new select location
-						//TODO : this is prolly not working , fix it
-						if (!isai || (isaiwhite != iswhite)) {
-							selcol = movcol;
-							selrow = movrow;
+						if (masterBoard.trymove(from, to)) {
+							masterBoard.move(from, to);
+							isselect = false;
+							iswhite = !iswhite;
+							//reset things after move success
+							prevTakenTime = GetTime() - prevMoveTime;
+							prevMoveTime = GetTime();
 						}
+						else {
+
+							//If not a possible move and it is dumb human's turn then make the move location the new select location
+							//TODO : this is prolly not working , fix it
+							if (!isai || (isaiwhite != iswhite)) {
+								selcol = movcol;
+								selrow = movrow;
+							}
+						}
+						ismove = false;
 					}
-					ismove = false;
 				}
 			}
 		}
