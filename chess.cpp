@@ -112,14 +112,16 @@ public:
 	std::vector<Pos> getCells(Content color) {
 
 		std::vector<Pos> cells;
-
+		cells.reserve(16);
 
 		for (int col = 0; col < 8; ++col) {
 			for (int row = 0; row < 8; ++row) {
 				Pos p;
 				p.row = row;
 				p.col = col;
-				if (at(p)->color == color)
+				//Debug stuff , if doesn't improve remove
+				auto ptr = at(p);
+				if (ptr->color == color)
 					cells.push_back(p);
 
 			}
@@ -133,12 +135,15 @@ public:
 		p.col = col;
 		return getmoves(p, forcedType);
 	}
+	
+	//todo:: debug variables below , remove later
+	unsigned countgetmoves = 0;
 
 	std::vector<Pos> getmoves(Pos ppos, Piece forcedType = NONE) {
-
+		++countgetmoves;
 		Cell *pieceptr = at(ppos);
 		std::vector<Pos> moves;
-
+		moves.reserve(32);	//reserve maximum moves of queen worst case, serious speed boost
 		if (pieceptr == nullptr)
 			return moves;
 		Cell& piece = *pieceptr;
@@ -369,9 +374,13 @@ public:
 
 	//first tries to move , if fail returns false , else moves and returns true
 	bool tryNmove(Pos from, Pos to) {
-		//These won't be nullptr if next move return true
-		Cell *fcell = at(from);
-		Cell *tcell = at(to);
+		//Going to have to check if nullptr or not 
+
+		if (at(from) == nullptr || at(to) == nullptr)
+			return false;
+
+		Cell fcell = *at(from);
+		Cell tcell = *at(to);
 
 		try {
 			if (!move(from, to))
@@ -381,10 +390,11 @@ public:
 			return false;
 		}
 
-		
-		if ( ((fcell->color == C_BLACK) && blackCheck) || ((fcell->color == C_WHITE) && (whiteCheck))) {
-			*at(from) = *fcell;
-			*at(to) = *tcell;
+	
+	
+		if ( ((fcell.color == C_BLACK) && blackCheck) || ((fcell.color == C_WHITE) && (whiteCheck))) {
+			*at(from) = fcell;
+			*at(to) = tcell;
 			return false;
 		}
 		return true;
@@ -778,7 +788,7 @@ int chess() {
 
 				try {
 					AIeval mainai(masterBoard);
-					mainai.depth = 3;
+					mainai.depth = 4;
 					mainai.isaiwhite = isaiwhite;
 					mainai.selrow = &selrow;
 					mainai.selcol = &selcol;
