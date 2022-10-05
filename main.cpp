@@ -4,7 +4,7 @@ int sudoku();
 int emfield();
 int chess();
 
-int mousestuff();
+int coaster();
 
 struct PointPot {
 	float x;
@@ -22,7 +22,7 @@ struct MyColor {
 
 int main() {
 
-	std::cout << "Enter e for em simulation and s for sudoku :  c for chess:";
+	std::cout << "Enter e for em simulation and s for sudoku :  c for chess: h for coaster:";
 	char c = 'x';
 	std::cin >> c;
 	
@@ -34,8 +34,9 @@ int main() {
 	case 's':
 		return sudoku();
 	case 'c':
-		//return mousestuff();
 		return chess();
+	case 'h':
+		return coaster();
 	}
 
 }

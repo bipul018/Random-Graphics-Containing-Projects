@@ -348,6 +348,42 @@ public:
 		return moves;
 	}
 
+	bool updateCheckStat(Content color) {
+		if (color == C_BLANK)
+			return false;
+
+
+		//Find the kings
+		auto cells = getCells(color);
+
+		Pos King; King.row = -1; King.col = -1;
+
+		for (auto& x : cells) {
+			if (at(x)->type == KING) {
+				King = x;
+				break;
+			}
+		}
+
+		bool& check = ((color == C_WHITE) ? whiteCheck : blackCheck);
+		check = false;
+		//Update the check to king status
+		for (int i = PAWN; i < NONE; ++i) {
+
+			if (!check) {
+				auto whiteEater = getmoves(King, static_cast<Piece>(i));
+				for (auto& x : whiteEater) {
+					if (at(x)->type == i) {
+						check = true;
+						break;
+					}
+				}
+			}
+
+		}
+
+	}
+
 	//supposed to perform half of the move , ie checks if move is legal or not
 	bool trymove(Pos from, Pos to) {
 
@@ -426,56 +462,10 @@ public:
 				src.type = NONE;
 				src.color = C_BLANK;
 
+				//update check status
+				updateCheckStat(C_WHITE);
+				updateCheckStat(C_BLACK);
 
-				//Find the kings
-				auto whites = getCells(C_WHITE);
-				auto blacks = getCells(C_BLACK);
-
-				Pos blackKing; blackKing.row = -1; blackKing.col = -1;
-				Pos whiteKing; whiteKing.row = -1; whiteKing.col = -1;
-
-				for (auto& x : whites) {
-					if (at(x)->type == KING) {
-						whiteKing = x;
-						break;
-					}
-				}
-				for (auto& x : blacks) {
-					if (at(x)->type == KING) {
-						blackKing = x;
-						break;
-					}
-				}
-
-
-				blackCheck = false;
-				whiteCheck = false;
-				//Update the check to king status
-				for (int i = PAWN; i < NONE; ++i) {
-
-					if (!whiteCheck) {
-						auto whiteEater = getmoves(whiteKing, static_cast<Piece>(i));
-						for (auto& x : whiteEater) {
-							if (at(x)->type == i) {
-								whiteCheck = true;
-								break;
-							}
-						}
-					}
-
-					if (!blackCheck) {
-						auto blackEater = getmoves(blackKing, static_cast<Piece>(i));
-						for (auto& x : blackEater) {
-							if (at(x)->type == i) {
-								blackCheck = true;
-								break;
-							}
-						}
-					}
-
-
-
-				}
 
 				return true;
 			}
@@ -788,7 +778,7 @@ int chess() {
 
 				try {
 					AIeval mainai(masterBoard);
-					mainai.depth = 4;
+					mainai.depth = 2;
 					mainai.isaiwhite = isaiwhite;
 					mainai.selrow = &selrow;
 					mainai.selcol = &selcol;
