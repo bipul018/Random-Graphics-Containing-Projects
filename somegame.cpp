@@ -227,9 +227,15 @@ int coaster() {
 	//angle of rotation in radians
 	double angle = 0;
 	double anglev = 0;
+	Vector2 front = { 1,0 };
 
 	//Returns system's forward direction
-	auto getforward = [](double angle)->Vector2 {
+	auto getforward = [&front](double angle)->Vector2 {
+
+		//this is a new approach 
+		return front;
+
+		//this is old approach
 		Vector2 vec = { 0 };
 		vec.x = cos(angle);
 		vec.y = sin(angle);
@@ -292,8 +298,12 @@ int coaster() {
 	};
 
 	float gravity = +20;
-	Vector2 vel{ 0,0 };
-	Vector2 acc{ 0,0 };
+
+	//These are for each tyre, rather than including pesky angular velocities and accln , I decided to do this instead
+	Vector2 vel1{ 0,0 };
+	Vector2 acc1{ 0,0 };
+	Vector2 vel2{ 0,0 };
+	Vector2 acc2{ 0,0 };
 
 	//elasticity factor
 	double elas = 0.1;
@@ -318,8 +328,10 @@ int coaster() {
 		}
 
 		if (IsKeyReleased(KEY_ENTER)) {
-			vel.x *= 1.5;
-			vel.y *= 1.5;
+			vel1.x *= 1.5;
+			vel1.x *= 1.5;
+			vel2.y *= 1.5;
+			vel2.y *= 1.5;
 		}
 		double tanforce = 0;
 		if (IsKeyDown(KEY_D))
@@ -330,72 +342,147 @@ int coaster() {
 		//ball stuff
 
 		//temporary centers and velocities
-		Vector2 tmpc = center, tmpv = vel;
+		Vector2 tmpc = center, tmpv1 = vel1, tmpv2 = vel2;double tmpang = angle;
 
-		center.x += vel.x* GetFrameTime();
-		center.y += vel.y* GetFrameTime();
+		//ball centers
+		Vector2 cen1 = getball(1);
+		Vector2 cen2 = getball(2);
 
-		vel.y += gravity * GetFrameTime();
-		vel.y += acc.y * GetFrameTime();
-		vel.x += acc.x * GetFrameTime();
+
+		//Skip rotation calculations , lets do all y linear velocities
+		//Vector2 transvel, rotvel;
+		//transvel.x = 0.5 * (vel1.x + vel2.x);
+		//transvel.y = 0.5 * (vel1.y + vel2.y);
+		//
+		//rotvel.x = 0.5 * (vel1.x - vel2.x);
+		//rotvel.y = 0.5 * (vel1.y - vel2.y);
+
+		//rotation = rvec x velvec
+		/*
+		float halfdist = Vector2Length({ cen1.x - cen2.x,cen1.y - cen2.y });
+		Vector2 halfvec = getforward(angle);
+		halfvec.x *= halfdist;
+		halfvec.y *= halfdist;
+
+		Vector2 paravel = { 0 };
+		paravel.x = (Vector2DotProduct(vel1, halfvec) + Vector2DotProduct(vel2, halfvec)) * getforward(angle).x / halfdist;
+		paravel.y = (Vector2DotProduct(vel1, halfvec) + Vector2DotProduct(vel2, halfvec)) * getforward(angle).y / halfdist;
+
+		Vector3 perpvel = { 0 };
+		perpvel = Vector3CrossProduct(Vector3{ halfvec.x / halfdist,halfvec.y / halfdist,0 }, Vector3{ vel1.x - vel2.x,vel1.y - vel2.y,0 });
+		perpvel = Vector3Scale(perpvel, 1.0f / (2 * halfdist));
+
+		angle += GetFrameTime() * (perpvel.z);
+
+		center.x += paravel.x* GetFrameTime();
+		center.y += paravel.y* GetFrameTime();*/
+
+		//trying another approach yet again
+		cen1 = getball(1);
+		cen2 = getball(2);
+
+		cen1.x += vel1.x * GetFrameTime();
+		cen1.y += vel1.y * GetFrameTime();
+		
+		cen2.x += vel2.x * GetFrameTime();
+		cen2.y += vel2.y * GetFrameTime();
+
+		center.x = 0.5 * (cen1.x + cen2.x);
+		center.y = 0.5 * (cen1.y + cen2.y);
+
+		front = Vector2Normalize(Vector2{ cen1.x - cen2.x,cen1.y - cen2.y });
+
+		vel1.y += gravity * GetFrameTime();
+		vel1.y += acc1.y * GetFrameTime();
+		vel1.x += acc1.x * GetFrameTime();
+		
+		vel2.y += gravity * GetFrameTime();
+		vel2.y += acc2.y * GetFrameTime();
+		vel2.x += acc2.x * GetFrameTime();
 
 
 		//check if collide and find if touch or not
-		Vector2 pta{ -1,-1 };
-		Vector2 ptb{ -1,-1 };
-		bool justcollided = checktouch(&pta, &ptb);
-		auto tmpcol = justcollided ? BLUE : YELLOW;
-		if (justcollided && !collided) {
+		Vector2 pt1a{ -1,-1 };
+		Vector2 pt1b{ -1,-1 };
+		Vector2 pt2a{ -1,-1 };
+		Vector2 pt2b{ -1,-1 };
 
-			//normal pointing towards upwards
-			Vector2 normal;
-			normal.y = (ptb.x - pta.x) * ((ptb.y > pta.y) ? 1 : -1);
-			normal.x = -abs(ptb.y - pta.y);
+		bool just1collided = checktouch(cen1,&pt1a, &pt1b);
+		bool just2collided = checktouch(cen2,&pt2a, &pt2b);
+		if (( just2collided || just1collided) && !collided) {
 
-			normal = Vector2Normalize(normal);
+			//If ballno = 1 then 1 ball else 2 ball
+			auto reflectball = [&](int ballno) {
+				if ((ballno != 1) && (ballno != 2))
+					throw - 1;
 
-			//normal and tangential components of vel
-			Vector2 tancom;
-			tancom.x = vel.x - Vector2DotProduct(normal, vel) * normal.x;
-			tancom.y = vel.y - Vector2DotProduct(normal, vel) * normal.y;
-			//now add tanforce if available
-			tancom.x += ((tancom.x > 0) ? 1 : ((tancom.x < 0) ? -1 : 0)) * GetFrameTime() * tanforce*30;
-			tancom.y += ((tancom.y > 0) ? 1 : ((tancom.y < 0) ? -1 : 0)) * GetFrameTime() * tanforce*30;
+				//decide by ballno
+				Vector2& pta = ((ballno == 1) ? pt1a : pt2a);
+				Vector2& ptb = ((ballno == 1) ? pt1b : pt2b);
+				Vector2& vel = ((ballno == 1) ? vel1 : vel2);
+				
+				//normal pointing towards upwards
+				Vector2 normal;
+				normal.y = (ptb.x - pta.x) * ((ptb.y > pta.y) ? 1 : -1);
+				normal.x = -abs(ptb.y - pta.y);
 
-			//normal component is adjusted to reflections and inelasticity
-			Vector2 normcom;
-			normcom.x = -Vector2DotProduct(normal, vel) * normal.x * sqrt(elas);
-			normcom.y = -Vector2DotProduct(normal, vel) * normal.y * sqrt(elas);
+				normal = Vector2Normalize(normal);
 
+				//normal and tangential components of vel
+				Vector2 tancom;
+				tancom.x = vel.x - Vector2DotProduct(normal, vel) * normal.x;
+				tancom.y = vel.y - Vector2DotProduct(normal, vel) * normal.y;
+				//normal component is adjusted to reflections and inelasticity
+				Vector2 normcom;
+				normcom.x = -Vector2DotProduct(normal, vel) * normal.x * sqrt(elas);
+				normcom.y = -Vector2DotProduct(normal, vel) * normal.y * sqrt(elas);
 
-			vel.y = normcom.y + tancom.y;
-			vel.x = normcom.x + tancom.x;
-			
-			
+				//now rotate the damn tyre 
+				vel.y = normcom.y + tancom.y;
+				vel.x = normcom.x + tancom.x;
 
+			}; 
+			if (just1collided)
+				reflectball(1);
+			if (just2collided)
+				reflectball(2);
 			collided = true;
 		}
 		else {
 			collided = false;
-			acc.x = 0;
-			acc.y = 0;
 		}
+		if (just2collided) {
+
+			//now add tanforce if available but along the forward direction this time , yay
+			/*tancom.x += ((tancom.x > 0) ? 1 : ((tancom.x < 0) ? -1 : 0)) * GetFrameTime() * tanforce * 30;
+			tancom.y += ((tancom.y > 0) ? 1 : ((tancom.y < 0) ? -1 : 0)) * GetFrameTime() * tanforce * 30;*/
+
+			vel1.x += tanforce * GetFrameTime() * getforward(angle).x;
+			vel1.y += tanforce * GetFrameTime() * getforward(angle).y;
+			vel2.x += tanforce * GetFrameTime() * getforward(angle).x;
+			vel2.y += tanforce * GetFrameTime() * getforward(angle).y;
+		}
+
 		//collisions with walls need to account if goes inside the walls too
 		if (center.x < radius) {
 			center.x = radius;
-			vel.x = -vel.x;
+			vel1.x = -vel1.x;
+			vel2.x = -vel2.x;
 		}
 		if (center.y < radius) {
 			center.y = radius;
-			vel.y = -vel.y;
+			vel1.y = -vel1.y;
+			vel2.y = -vel2.y;
 		}
 		if (center.x > width - radius) {
 			center.x = width - radius;
-			vel.x = -vel.x;
+			vel1.x = -vel1.x;
+			vel2.x = -vel2.x;
 		}
 		if (center.y > height - radius) {
 			center.y = height - radius;
-			vel.y = -vel.y;
+			vel1.y = -vel1.y;
+			vel2.y = -vel2.y;
 		}
 
 
@@ -408,7 +495,30 @@ int coaster() {
 		for (int i = 0; i < width; ++i) {
 			DrawLine(i, height-1, i, vecs[i].y, GREEN);
 		}
-		DrawCircle(center.x, center.y, radius, tmpcol);
+
+		Vector2 perp;
+		perp.y = -front.x;
+		perp.x = front.y;
+		if (perp.y > 0) {
+			perp.x = -perp.x;
+			perp.y = -perp.y;
+		}
+		DrawTriangle(cen1,
+			Vector2{ cen1.x + perp.x * 1.5f * (float)radius,cen1.y + perp.y * 1.5f * (float)radius },
+			Vector2{ cen2.x + perp.x * 1.5f * (float)radius,cen2.y + perp.y * 1.5f * (float)radius }, DARKBLUE);
+		DrawTriangle(cen2,
+			cen1,
+			Vector2{ cen2.x + perp.x * 1.5f * (float)radius,cen2.y + perp.y * 1.5f * (float)radius }, DARKBLUE);
+
+		auto getcol = [](bool justcollide)->Color {
+			if (justcollide)
+				return WHITE;
+			else
+				return BLACK;
+		};
+
+		DrawCircle(getball(1).x, getball(1).y, radius, getcol(just1collided));
+		DrawCircle(getball(2).x, getball(2).y, radius * 1.05, getcol(just2collided));
 		EndDrawing();
 
 
