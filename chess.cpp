@@ -41,7 +41,9 @@ struct Pos {
 	bool operator <(Pos b)const {
 		return ((row * 8 + col) < (b.row * 8 + b.col));
 	}
-
+	bool operator ==(Pos b)const {
+		return (row == b.row) && (col == b.col);
+	}
 	//Provide interchangeability between Pos and Vector2
 	operator Vector2() {
 		Vector2 vec;
@@ -66,6 +68,7 @@ struct Cell {
 //Chess follow bottom to top & left to right model FYI
 //Row is denoted by 1 2 ... column y A B ...
 
+
 class Board : public std::array<Cell, 8 * 8>{
 public:
 
@@ -76,6 +79,9 @@ public:
 	std::vector<Pos> tmpuse;
 
 	//for optimization again 
+	std::vector<Pos> blacks;
+	std::vector<Pos> whites;
+	bool cellsfilled = false;
 
 
 	Cell* at(int row, int col) {
@@ -124,24 +130,59 @@ public:
 
 	}
 	//Previously set as a std::set, probably for particular order of the pieces 
-	std::vector<Pos> getCells(Content color) {
+	std::vector<Pos>& getCells(Content color) {
 
-		std::vector<Pos> cells;
-		cells.reserve(16);
+		if (!cellsfilled) {
+			whites.reserve(16);
+			blacks.reserve(16);
 
-		for (int col = 0; col < 8; ++col) {
-			for (int row = 0; row < 8; ++row) {
-				Pos p;
-				p.row = row;
-				p.col = col;
-				//Debug stuff , if doesn't improve remove
-				auto ptr = at(p);
-				if (ptr->color == color)
-					cells.push_back(p);
+			for (int col = 0; col < 8; ++col) {
+				for (int row = 0; row < 8; ++row) {
+					Pos p;
+					p.row = row;
+					p.col = col;
+					//Debug stuff , if doesn't improve remove
+					auto ptr = at(p);
+					if (ptr->color == C_WHITE)
+						whites.push_back(p);
+					if (ptr->color == C_BLACK)
+						blacks.push_back(p);
 
+				}
+			}
+			cellsfilled = true;
+		}
+		if (color == C_WHITE)
+			return whites;
+		else if (color == C_BLACK)
+			return blacks;
+		else
+			throw "ERROR";
+	}
+
+	//since std::vector cannot remove by element, ..
+	bool removeCell(Pos cell) {
+		auto& vec = getCells(at(cell)->color);
+		for (auto ptr = vec.begin(); ptr < vec.end(); ++ptr) {
+			if (*ptr == cell) {
+				vec.erase(ptr);
+				return true;
 			}
 		}
-		return cells;
+		return false;
+	}
+	
+	//since again vector no find , tried std::find error giving so ...
+	Pos* findCell(Pos cell) {
+		if (at(cell) == nullptr)
+			return nullptr;
+		auto& vec = getCells(at(cell)->color);
+		for (auto &pcell:vec) {
+			if (pcell == cell) {
+				return &pcell;
+			}
+		}
+		return nullptr;
 	}
 
 	//Trying to change stuff , may need later if doesnot work out
@@ -375,11 +416,11 @@ public:
 		checkkinggetmoves = 0;
 
 		//Find the kings
-		auto cells = getCells(color);
+		auto &cells = getCells(color);
 
 		Pos King; King.row = -1; King.col = -1;
 
-		for (auto& x : cells) {
+		for (auto x : cells) {
 			if (at(x)->type == KING) {
 				King = x;
 				break;
@@ -445,6 +486,9 @@ public:
 		Cell fcell = *at(from);
 		Cell tcell = *at(to);
 
+		//Excat cell in blacks or whites that has src cell
+		Pos& fcellsrc = *findCell(from);
+		bool tcellempty = (tcell.color == C_BLANK);
 		try {
 			if (!move(from, to))
 				return false;
@@ -458,6 +502,9 @@ public:
 		if ( ((fcell.color == C_BLACK) && blackCheck) || ((fcell.color == C_WHITE) && (whiteCheck))) {
 			*at(from) = fcell;
 			*at(to) = tcell;
+			fcellsrc = from;
+			if (!tcellempty)
+				getCells(tcell.color).push_back(to);
 			return false;
 		}
 		return true;
@@ -483,7 +530,10 @@ public:
 		for (auto& x : moves) {
 			if (((x.row) == (to.row)) && ((x.col) == (to.col))) {
 
-				auto revCol = ((srcCol == C_BLACK) ? C_WHITE : C_BLACK);
+				//auto revCol = ((srcCol == C_BLACK) ? C_WHITE : C_BLACK);
+
+				if (des.color != C_BLANK)
+					removeCell(to);
 
 				des = src;
 				src.type = NONE;
@@ -548,6 +598,9 @@ p------p\
 -b--q--R\
 r---k---\
 ";
+
+//Debug stuff , todo:: used for preanalyzing memory requirement , be careful
+std::vector<Board> debugstore;
 
 bool fillBoard(Board& board, const char* filler) {
 
@@ -671,7 +724,7 @@ public:
 	//a vector for temporary use , trying for speed boost if possible
 	std::vector<Pos> tmpuse;
 	AIeval(Board& board):masterBoard(board){
-		tmpuse.reserve(32);
+		tmpuse.reserve(32); debugstore.push_back(masterBoard);
 	}
 
 	//An ai for selecting next moving row and column
@@ -680,7 +733,7 @@ public:
 	//For now a minmax algorithm only, plss update this to a better weighted algorithm
 	float evaluate() {
 		totalevals++;
-		auto cells = masterBoard.getCells((isaiwhite) ? C_WHITE : C_BLACK);
+		auto &cells = masterBoard.getCells((isaiwhite) ? C_WHITE : C_BLACK);
 
 		std::vector<std::pair<float, std::pair<Pos, Pos>>> moves;
 
