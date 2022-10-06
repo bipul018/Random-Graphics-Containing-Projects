@@ -8,6 +8,13 @@
 #include <chrono>
 #include <thread>
 
+//Debug counters
+//todo:: delete on finalizaion
+unsigned checkkingcount = 0;
+unsigned getmovescount = 0;
+unsigned checkkinggetmoves = 0;
+unsigned projmakemoves = 0;
+
 enum Piece {
 	PAWN,
 	BISHOP,
@@ -47,6 +54,7 @@ struct Pos {
 		row = vec.x;
 		col = vec.y;
 	}
+	Pos(int r, int c) :row(r), col(c) {}
 
 };
 
@@ -63,6 +71,13 @@ public:
 
 	bool blackCheck = false;
 	bool whiteCheck = false;
+	
+	//trying to optimize by having a already ready getmoves vector for using
+	std::vector<Pos> tmpuse;
+
+	//for optimization again 
+
+
 	Cell* at(int row, int col) {
 
 		if (row > 7 || row < 0 || col>7 || col < 0)
@@ -129,21 +144,23 @@ public:
 		return cells;
 	}
 
-	std::vector<Pos> getmoves(int row, int col, Piece forcedType = NONE) {
-		Pos p;
-		p.row = row;
-		p.col = col;
-		return getmoves(p, forcedType);
-	}
+	//Trying to change stuff , may need later if doesnot work out
+	//std::vector<Pos> getmoves(int row, int col, Piece forcedType = NONE) {
+	//	Pos p;
+	//	p.row = row;
+	//	p.col = col;
+	//	return getmoves(p, forcedType);
+	//}
 	
-	//todo:: debug variables below , remove later
-	unsigned countgetmoves = 0;
+	//also send a pos vector for performance issues
+	std::vector<Pos>& getmoves(std::vector<Pos> & moves,Pos ppos, Piece forcedType = NONE) {
+	
+		//debug variables
+		getmovescount++;
 
-	std::vector<Pos> getmoves(Pos ppos, Piece forcedType = NONE) {
-		++countgetmoves;
 		Cell *pieceptr = at(ppos);
-		std::vector<Pos> moves;
-		moves.reserve(32);	//reserve maximum moves of queen worst case, serious speed boost
+		//std::vector<Pos> moves;
+		//moves.reserve(32);	//reserve maximum moves of queen worst case, serious speed boost
 		if (pieceptr == nullptr)
 			return moves;
 		Cell piece = *pieceptr;
@@ -352,6 +369,10 @@ public:
 		if (color == C_BLANK)
 			return false;
 
+		//debug stuff
+		checkkingcount++;
+		unsigned getmovecounttmp = getmovescount;
+		checkkinggetmoves = 0;
 
 		//Find the kings
 		auto cells = getCells(color);
@@ -371,7 +392,7 @@ public:
 		for (int i = PAWN; i < NONE; ++i) {
 
 			if (!check) {
-				auto whiteEater = getmoves(King, static_cast<Piece>(i));
+				auto &whiteEater = getmoves(tmpuse,King, static_cast<Piece>(i));
 				for (auto& x : whiteEater) {
 					if (at(x)->type == i) {
 						check = true;
@@ -382,12 +403,18 @@ public:
 
 		}
 
+		//debug stuff
+		checkkinggetmoves = getmovescount - getmovecounttmp;
+		getmovescount = getmovecounttmp;
+
 	}
 
 	//supposed to perform half of the move , ie checks if move is legal or not
 	bool trymove(Pos from, Pos to) {
 
 		Board tmpboard(*this);
+
+
 		try {
 			if (!tmpboard.move(from, to))
 				return false;
@@ -452,7 +479,7 @@ public:
 		if (srcCol == C_BLANK)
 			throw "Cannot move when there's no piece ";
 
-		auto moves = getmoves(from);
+		auto &moves = getmoves(tmpuse,from);
 		for (auto& x : moves) {
 			if (((x.row) == (to.row)) && ((x.col) == (to.col))) {
 
@@ -466,6 +493,8 @@ public:
 				updateCheckStat(C_WHITE);
 				updateCheckStat(C_BLACK);
 
+				//debug variable
+				projmakemoves++;
 
 				return true;
 			}
@@ -639,7 +668,11 @@ public:
 	unsigned* movrow = nullptr;
 	unsigned* movcol = nullptr;
 
-	AIeval(Board& board):masterBoard(board){}
+	//a vector for temporary use , trying for speed boost if possible
+	std::vector<Pos> tmpuse;
+	AIeval(Board& board):masterBoard(board){
+		tmpuse.reserve(32);
+	}
 
 	//An ai for selecting next moving row and column
 	//Design for moving in a separate thread as much as possible
@@ -651,9 +684,10 @@ public:
 
 		std::vector<std::pair<float, std::pair<Pos, Pos>>> moves;
 
+		Board tmp = masterBoard;
+		tmp.tmpuse.reserve(32);
 		for (auto c : cells) {
-			auto ms = masterBoard.getmoves(c);
-			Board tmp = masterBoard;
+			auto &ms = masterBoard.getmoves(tmpuse,c);
 			for (auto m : ms) {
 				if (tmp.tryNmove(c, m)) {
 					std::pair<Pos, Pos> p;
@@ -683,6 +717,8 @@ public:
 					fp.second = p;
 					moves.push_back(fp);
 					tmp = masterBoard;
+
+
 				}
 			}
 		}
@@ -722,7 +758,13 @@ int chess() {
 	cellpaint.board = &masterBoard;
 
 	fillBoard(masterBoard, defaultBoardCond);
-	fillBoard(masterBoard, pracBoard);
+	//fillBoard(masterBoard, pracBoard);
+	
+	//a vector for using with getmoves later on to avoid realllocating all the time
+	std::vector<Pos> tmpusegetmoves;
+	tmpusegetmoves.reserve(32);
+	masterBoard.tmpuse.reserve(32);
+	
 	//Game flags , sorry for using plain old bools now
 	bool isselect = false;
 	bool ismove = false;
@@ -778,7 +820,7 @@ int chess() {
 
 				try {
 					AIeval mainai(masterBoard);
-					mainai.depth = 2;
+					mainai.depth = 4;
 					mainai.isaiwhite = isaiwhite;
 					mainai.selrow = &selrow;
 					mainai.selcol = &selcol;
@@ -915,7 +957,7 @@ int chess() {
 		if (isselect) {
 			cellpaint(selrow, selcol, YELLOW);
 
-			auto colors = masterBoard.getmoves(selrow, selcol);
+			auto& colors = masterBoard.getmoves(tmpusegetmoves, Pos(selrow, selcol));
 			for (auto& to : colors) {
 				Pos from;
 				from.row = selrow;
