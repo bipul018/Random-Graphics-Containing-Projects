@@ -229,6 +229,13 @@ int coaster() {
 	double anglev = 0;
 	Vector2 front = { 1,0 };
 
+	float bonusTime = 0.0f;
+	bool justaddedTime = false;
+	auto getdeltime = [&bonusTime,&justaddedTime]()->float {
+		return GetFrameTime();
+
+	};
+
 	//Returns system's forward direction
 	auto getforward = [&front](double angle)->Vector2 {
 
@@ -335,9 +342,9 @@ int coaster() {
 		}
 		double tanforce = 0;
 		if (IsKeyDown(KEY_D))
-			tanforce = 1;
+			tanforce = 10;
 		if (IsKeyDown(KEY_A))
-			tanforce = -1;
+			tanforce = -10;
 		
 		//ball stuff
 
@@ -347,35 +354,6 @@ int coaster() {
 		//ball centers
 		Vector2 cen1 = getball(1);
 		Vector2 cen2 = getball(2);
-
-
-		//Skip rotation calculations , lets do all y linear velocities
-		//Vector2 transvel, rotvel;
-		//transvel.x = 0.5 * (vel1.x + vel2.x);
-		//transvel.y = 0.5 * (vel1.y + vel2.y);
-		//
-		//rotvel.x = 0.5 * (vel1.x - vel2.x);
-		//rotvel.y = 0.5 * (vel1.y - vel2.y);
-
-		//rotation = rvec x velvec
-		/*
-		float halfdist = Vector2Length({ cen1.x - cen2.x,cen1.y - cen2.y });
-		Vector2 halfvec = getforward(angle);
-		halfvec.x *= halfdist;
-		halfvec.y *= halfdist;
-
-		Vector2 paravel = { 0 };
-		paravel.x = (Vector2DotProduct(vel1, halfvec) + Vector2DotProduct(vel2, halfvec)) * getforward(angle).x / halfdist;
-		paravel.y = (Vector2DotProduct(vel1, halfvec) + Vector2DotProduct(vel2, halfvec)) * getforward(angle).y / halfdist;
-
-		Vector3 perpvel = { 0 };
-		perpvel = Vector3CrossProduct(Vector3{ halfvec.x / halfdist,halfvec.y / halfdist,0 }, Vector3{ vel1.x - vel2.x,vel1.y - vel2.y,0 });
-		perpvel = Vector3Scale(perpvel, 1.0f / (2 * halfdist));
-
-		angle += GetFrameTime() * (perpvel.z);
-
-		center.x += paravel.x* GetFrameTime();
-		center.y += paravel.y* GetFrameTime();*/
 
 		//trying another approach yet again
 		cen1 = getball(1);

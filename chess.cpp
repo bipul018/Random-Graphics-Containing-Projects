@@ -146,7 +146,7 @@ public:
 		moves.reserve(32);	//reserve maximum moves of queen worst case, serious speed boost
 		if (pieceptr == nullptr)
 			return moves;
-		Cell& piece = *pieceptr;
+		Cell piece = *pieceptr;
 		moves.clear();
 		if (piece.color != C_BLANK) {
 
@@ -510,14 +510,14 @@ pppppppp\
 rhbqkbhr\
 ";
 const char pracBoard[] = "\
------BH-\
-PH--K-P-\
---RP----\
--P-QP-pb\
--pPp----\
-p-p--qh-\
---rk---R\
------p--\
+---K-B-R\
+-RP-P-P-\
+-P---H--\
+Pbp-pr-P\
+p------p\
+--h---p-\
+-b--q--R\
+r---k---\
 ";
 
 bool fillBoard(Board& board, const char* filler) {
@@ -722,7 +722,7 @@ int chess() {
 	cellpaint.board = &masterBoard;
 
 	fillBoard(masterBoard, defaultBoardCond);
-	//fillBoard(masterBoard, pracBoard);
+	fillBoard(masterBoard, pracBoard);
 	//Game flags , sorry for using plain old bools now
 	bool isselect = false;
 	bool ismove = false;
