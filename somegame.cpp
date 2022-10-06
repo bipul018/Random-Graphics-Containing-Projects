@@ -191,21 +191,28 @@ int coaster() {
 
 	float accum = 0;
 
-
+	//Array for amplitudes
 	float amps[20];
+	//Array for those height points
 	Vector2 *vecs = new Vector2[width];
+
+	//Hill generator simple lambda fxn
 	auto sinehill = [&]() {
 
 		float sumamp = 0;
 		float topamp = 1.0;
 
+		//generates random decreasing amplitudes
 		for (int i = 1; i <= sizeof(amps) / sizeof(amps[0]); i++) {
+			//maximum amplitude for current iteration , by adjusting factor in exp high frequencies can be made more/less prominent
 			topamp = std::uniform_real_distribution<double>(0.9 / exp(i*0.1), 1.0 / exp(i*0.1))(rng);
 			amps[i - 1] = std::uniform_real_distribution<double>(0, topamp)(rng);
 			//topamp = 1.0 / (i + 1);
 			sumamp += amps[i - 1];
 		}
+		//Initial random phase difference
 		float offset = std::uniform_real_distribution<double>(0, 2 * PI)(rng);
+		//Summing up of half range fourier series for all availabe amplitudes
 		for (int i = 0; i < width; ++i) {
 			vecs[i].x = i;
 			vecs[i].y = 0;
@@ -218,6 +225,7 @@ int coaster() {
 
 	};
 
+	//calling the function
 	sinehill();
 
 	double radius = 30;
