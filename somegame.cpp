@@ -4,179 +4,6 @@
 #include <functional>
 
 
-class HillGen {
-public:
-
-	unsigned full;
-	unsigned view;
-	long currptr = 0;
-	Vector2* arr = nullptr;
-	double* seed = nullptr;
-
-	std::mt19937_64& rng;
-
-
-	double top = 800;
-	double bottom = 100;
-	double rate = 1.5;
-
-	double mid() {
-		return 0.5 * (top + bottom);
-	}
-	double diff() {
-		return top - bottom;
-	}
-
-	//double getnext() {
-	//		y += y1;
-	//	//y += tan(y1);
-	//		y1 += y2;
-	//		y2 += std::uniform_real_distribution<double>(0, 0.02)(rng) - 0.01;
-	//		//y1 += std::uniform_real_distribution<double>(-PI/180, PI/180)(rng);
-
-	//		if (y > mid()) {
-	//			//y1 -= 0.1*rate / abs(top + diff() * 0 - y);
-
-	//			double fac = 2 * (top - y) / diff() - 1;
-	//			y1 += fac * y1;
-
-	//		}
-	//		else if(y<mid()) {
-	//			//y1 += 0.1*rate / abs(bottom - diff() * 0 - y);
-	//			double fac = 2 * (y - bottom) / diff() - 1;
-
-	//			y1 += fac * y1;
-	//		}
-	//	
-	//return y;
-	//}
-
-	//end exclusive
-	void fill(unsigned start, unsigned end) {
-
-		unsigned y = start;
-		if (start > end) {
-			start = end;
-			end = y;
-		}
-
-		//fill seed
-		//clear field
-		for (int i = start; i < end; ++i) {
-			seed[i] = std::uniform_real_distribution<double>(0, 1)(rng);	
-			arr[i].x = i;
-			arr[i].y = 0;
-		}
-
-
-		//now fill octaves
-		int o = 900;
-		//factor for each octave stages divided by rate
-		double fac = 1.0;
-		//sum of fac for mapping back
-		double facsum = 0;
-		//for each octave
-		for (int octaves=0; octaves <o; ++octaves) {
-
-			//goes from lowest freq / highest range to highest freq / lowest range
-			//for each sement in each ocatave
-			for (float xx = start; xx < end; xx += view * fac) {
-
-				int x1 = xx;
-				int x2 = (int)(xx + view * fac) % full;
-				//delx = view/octaves
-
-
-				//for each element in each octave
-				for (int i = xx; i < (xx + view * fac) && i < end; ++i) {
-
-					double y = seed[x1] + (i - x1) * (seed[x2] - seed[x1]) /( fac * view);
-					arr[i].y += fac * y;
-
-				}
-
-			}
-			facsum += fac;
-			fac /= rate;
-			
-		}
-
-		//Now mapping back to desired range
-		for (int i = start; i < end; ++i) {
-			//mapping to 0 1
-			arr[i].y /= facsum;
-			//mapping to top bottom
-			arr[i].y = bottom * (1 - arr[i].y) + top * arr[i].y;
-		}
-
-		
-	}
-
-	HillGen(std::mt19937_64& rngfunc,unsigned maxSize, unsigned viewSize,
-		double upmost=800,double downmost=100,double pushfac = 0.1 ):
-
-		rng(rngfunc),top(upmost),bottom(downmost),rate(pushfac) {
-
-		if (maxSize > viewSize) {
-			full = maxSize;
-			view = viewSize;
-		}
-		else {
-			full = viewSize;
-			view = maxSize;
-		}
-
-		arr = new Vector2[full];
-		seed = new double[full];
-		
-		if (upmost < downmost) {
-			top = downmost;
-			bottom = upmost;
-		}
-
-		fill(0, full);
-
-
-	}
-
-	void shift(int n) {
-		
-		/*
-		currptr += n;
-		if (currptr < 0)
-			currptr = 0;
-		if (currptr > (full - view)) {
-			if (currptr >= full) {
-
-				for (int i = 0; i < full; ++i) {
-					arr[i].y = getnext();
-				}
-				currptr = 0;
-			}
-			else {
-				memmove(arr, arr + currptr, (full - currptr) * sizeof(Vector2));
-				for (int i = currptr; i < full; ++i) {
-					arr[i].y = getnext();
-				}
-				currptr = 0;
-			}
-		}*/
-	}
-
-	Vector2* getView() {
-		for (int i = currptr; i < currptr + view; ++i) {
-			arr[i].x = i-currptr;
-		}
-		return arr + currptr;
-	}
-
-	~HillGen() {
-		delete[] arr;
-		delete[] seed;
-	}
-
-
-};
 
 int coaster() {
 	std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -187,8 +14,6 @@ int coaster() {
 	SetTargetFPS(60);
 
 	
-	//HillGen *hills =new HillGen(rng, 900, 901);
-
 	float accum = 0;
 
 	//Array for amplitudes
@@ -337,8 +162,6 @@ int coaster() {
 			center.y += 2.5;
 
 		if (IsKeyReleased(KEY_SPACE)) {
-			//delete hills;
-			//hills = new HillGen(rng, 1800, 900);
 			sinehill();
 		}
 
@@ -475,8 +298,6 @@ int coaster() {
 		ClearBackground(SKYBLUE);
 		BeginDrawing();
 
-		//DrawLineStrip(hills->getView(), 900, DARKBLUE);
-		
 		DrawLineStrip(vecs, width, RED);
 		for (int i = 0; i < width; ++i) {
 			DrawLine(i, height-1, i, vecs[i].y, GREEN);

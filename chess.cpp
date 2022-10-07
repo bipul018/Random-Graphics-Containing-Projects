@@ -589,14 +589,14 @@ pppppppp\
 rhbqkbhr\
 ";
 const char pracBoard[] = "\
----K-B-R\
--RP-P-P-\
--P---H--\
-Pbp-pr-P\
-p------p\
---h---p-\
--b--q--R\
-r---k---\
+R--Q-K-R\
+PP-HHP-P\
+--PP--PB\
+----P-h-\
+----p--p\
+-----qp-\
+pppp-p--\
+rhb-kb-r\
 ";
 
 //Debug stuff , todo:: used for preanalyzing memory requirement , be careful
@@ -724,7 +724,7 @@ public:
 	//a vector for temporary use , trying for speed boost if possible
 	std::vector<Pos> tmpuse;
 	AIeval(Board& board):masterBoard(board){
-		tmpuse.reserve(32); debugstore.push_back(masterBoard);
+		tmpuse.reserve(32); //debugstore.push_back(masterBoard);
 	}
 
 	//An ai for selecting next moving row and column
@@ -811,7 +811,7 @@ int chess() {
 	cellpaint.board = &masterBoard;
 
 	fillBoard(masterBoard, defaultBoardCond);
-	//fillBoard(masterBoard, pracBoard);
+	fillBoard(masterBoard, pracBoard);
 	
 	//a vector for using with getmoves later on to avoid realllocating all the time
 	std::vector<Pos> tmpusegetmoves;
@@ -823,7 +823,7 @@ int chess() {
 	bool ismove = false;
 	bool iswhite = true;
 	bool isai = true;
-	bool isaiwhite = false;
+	bool isaiwhite = true;
 	bool gameover = false;
 
 	//Selection row and column
