@@ -86,9 +86,24 @@ int baghchal() {
 	};
 
 	//game informations 
-	char board[25];
+	using Board = std::array<char, 25>;
+
+	Board board;
 	unsigned ngoats = 0;
 	unsigned neaten = 0;
+
+	//additional game informations
+	//Variable to store selected box
+	int selectboxn = -1;
+	//Some bool flags that may mo may not be used
+	bool isselect = false;
+	bool istiger = false;			//Denotes turn of tiger or goat
+	bool istigerai = false;			//Denotes if tiger is to be played by an ai
+	bool isgoatai = false;			//Denotes if goat is to be played by an ai
+	bool isgameover = false;		//Will be true once game is over
+	bool isgamestart = true;		//To denote if game has startes
+
+
 	//Decided to hard code all transitions
 	//16 possible transitions where path 
 	std::array<std::vector<int>, 16> transitions;
@@ -103,7 +118,7 @@ int baghchal() {
 				//fills each row elements
 				va.push_back(j * 5 + i);
 				//fills each col elements
-				vb.push_back(i + j * 5);
+				vb.push_back(i * 5 + j);
 			}
 			transitions.at(i) = va;
 			transitions.at(5 + i) = vb;
@@ -132,6 +147,78 @@ int baghchal() {
 		transitions.at(15).push_back(22 - 4 * i);
 	}
 	
+	//validates the move and moves the thing if possible so takes in board information
+	//Unfortunately this wont validate the trying to put goat in 
+	auto trymove = [&transitions](int from, int to, Board& board,unsigned& ngoats, unsigned &neaten) {
+
+		//returns false if trying to move to/from out of board or trying to move to same location
+		if (from < 0 || to < 0 || from >= 25 || to >= 25 )
+			return false;
+
+		//determine if from is empty or not
+		if (board.at(from) == NONE)
+			return false;
+
+		//if from has goat but goat is yet to be put
+		if ((board.at(from) == GOAT) && ngoats < 20)
+			return false;
+
+
+		//find the transition group containing both from and to
+		for (auto& tran : transitions) {
+
+			//records a valid position if from and to are found else -1
+			int fromloc = -1;
+			int	toloc = -1;
+
+			//searches whether to and from are in tran
+			for (int i = 0; i < tran.size();++i) {
+				if (tran.at(i) == from)
+					fromloc = i;
+				if (tran.at(i) == to)
+					toloc = i;
+			}
+
+			//if both are in tran decide whether move is possible
+			if (fromloc >= 0 && toloc >= 0) {
+
+				//if consecutive and to is empty , transition is possible
+				if ((board.at(to) == NONE) && (abs(fromloc - toloc) == 1)) {
+					board.at(to) = board.at(from);
+					board.at(from) = NONE;
+					return true;
+				}
+
+				//else if from is tiger, from and to are 2 units apart and there is a goat in between
+				//since each elements in each transitions are in arithmetic progression , from and to average works!!!
+				if ((board.at(from) == TIGER) && (abs(fromloc - toloc) == 2) && (board.at((from + to) / 2) == GOAT)) {
+					board.at(to) = TIGER;
+					board.at((from + to) / 2) = NONE;
+					board.at(from) = NONE;
+					neaten++;
+					return true;
+				}
+
+				//if none of above work then not possible
+				return false;
+			}
+
+		}
+		return false;
+
+	};
+
+	//Yet another function just for putting goats only
+	auto putgoat = [](int to, Board& board, unsigned& ngoats) {
+		if (to < 0 || to >= 25)
+			return false;
+		if (ngoats >= 20)
+			return false;
+		if (board.at(to) != NONE)
+			return false;
+		board.at(to) = GOAT;
+		ngoats++;
+	};
 
 	//string to initialize game
 	const char defaultboard[] =
@@ -182,6 +269,50 @@ t---t";
 
 	while (!WindowShouldClose()) {
 
+		//Filter mouse click event is game is not over
+		if (!isgameover && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+			//store mouse clicked position 
+			Vector2 mpos = GetMousePosition();
+
+			//compare mouse positon against game rectangle
+			if (CheckCollisionPointRec(mpos, gamerec)) {
+
+				int boxn = coortobox(mpos.x, mpos.y);
+
+				//If a box is indeed chosen
+				if (boxn >= 0) {
+
+					//If not selected already check if valid box is chosen and select or if goat to put , put
+					if (!isselect) {
+
+						//if goat can be put and is goat's turn then do that
+						if (!istiger && putgoat(boxn,board,ngoats)) {
+							istiger = !istiger;
+						}
+						//If selected on tiger on tiger turn and ... select
+						else if(((board.at(boxn) == GOAT) != istiger)&&((board.at(boxn) == TIGER ) == istiger)) {
+							selectboxn = boxn;
+							isselect = true;
+						}
+
+					}
+					else {
+						//If can move , then move else reset selection
+						if (trymove(selectboxn, boxn, board, ngoats, neaten)) {
+							isselect = false;
+							istiger = !istiger;
+						}
+						else  {
+							isselect = false;
+						}
+					}
+				}
+
+
+			}
+
+		}
+
 
 		ClearBackground(BLACK);
 		BeginDrawing();
@@ -221,19 +352,22 @@ t---t";
 		DrawLine(midrec.x, lastrec.y, firstrec.x, midrec.y, WHITE);
 		DrawLine(midrec.x, lastrec.y, lastrec.x, midrec.y, WHITE);
 
+
 		for (int i = 0; i < 25; ++i) {
 
 			Rectangle drawrec = downrec(boxtorec(i));
 
-			int row;
-			int col;
-			boxtorowcol(i, row, col);
+			//Prints row,col instead of actual pieces
+			//int row;
+			//int col;
+			//boxtorowcol(i, row, col);
 
-			std::string str = std::to_string(row) + "," + std::to_string(col);
+			//std::string str = std::to_string(row) + "," + std::to_string(col);
 
-			DrawText(str.c_str(), drawrec.x, drawrec.y, drawrec.width / str.length(), YELLOW);
+			//DrawText(str.c_str(), drawrec.x, drawrec.y, drawrec.width / str.length(), YELLOW);
 
-			continue;
+			//continue;
+
 			if (board[i] == TIGER) {
 				DrawTexture(tigertex, drawrec.x, drawrec.y, WHITE);
 			}
@@ -244,6 +378,19 @@ t---t";
 
 		}
 
+		//draw selected cell if selected
+		if (isselect) {
+			Rectangle rec = boxtorec(selectboxn);
+			Color c = YELLOW;
+			c.a = 100;
+			float radius;
+			if (rec.width < rec.height)
+				radius = rec.width / 2;
+			else
+				radius = rec.height / 2;
+			DrawCircle(rec.x + rec.width / 2, rec.y + rec.height / 2, radius, c);
+
+		}
 		EndDrawing();
 
 	}
