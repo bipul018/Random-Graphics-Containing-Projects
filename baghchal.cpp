@@ -1,5 +1,6 @@
 #include <raylib-cpp.hpp>
 #include <array>
+#include <functional>
 
 int baghchal() {
 	int width = 900;
@@ -8,7 +9,7 @@ int baghchal() {
 	InitWindow(width, height, "Tiger Move");
 	SetTargetFPS(90);
 
-
+	//Rectangle for game
 	Rectangle gamerec;
 	gamerec.x = 0;
 	gamerec.y = 0;
@@ -113,7 +114,7 @@ int baghchal() {
 	bool isselect = false;
 	bool istiger = false;			//Denotes turn of tiger or goat
 	bool istigerai = false;			//Denotes if tiger is to be played by an ai
-	bool isgoatai = false;			//Denotes if goat is to be played by an ai
+	bool isgoatai = true;			//Denotes if goat is to be played by an ai
 	bool isgamestart = true;		//To denote if game has startes
 
 
@@ -266,7 +267,7 @@ int baghchal() {
 				if (checkmove(game, tn, fromloc, toloc, eatpos)) {
 					game.board.at(to) = game.board.at(from);
 					game.board.at(from) = NONE;
-					if (eatpos > 1) {
+					if (eatpos >= 0) {
 						game.board.at(eatpos) = NONE;
 						game.neaten++;
 					}
@@ -343,29 +344,31 @@ int baghchal() {
 
 	};
 
-	//Updates the game state , also takes in whether it's tiger's turn or not returns if playable
+	//Updates the game state , also takes in whether it's tiger's turn or not , returns the moves vector
 	auto updateGame = [&getmoves](GameUnit& game, bool istiger) {
 
-		if (game.state != PLAY)
-			return false;
-
-		if (game.neaten >= 5) {
-			game.state = T_WIN;
-			return false;
-		}
+		
 
 		auto moves = getmoves(game, !istiger);
 
+		if (game.state != PLAY)
+			return moves;
+
+		if (game.neaten >= 5) {
+			game.state = T_WIN;
+			return moves;
+		}
+
 		if (istiger && moves.empty()) {
 			game.state = G_WIN;
-			return false;
+			return moves;
 		}
 
 		if (!istiger && moves.empty()) {
 			game.state = DRAW;
-			return false;
+			return moves;
 		}
-		return true;
+		return moves;
 
 
 	};
@@ -415,58 +418,178 @@ t---t";
 	Texture2D tigertex = LoadTextureFromImage(tiger);
 	Texture2D goattex = LoadTextureFromImage(goat);
 
-	
+	//Now begins the AI part, completely experimental
+
+	//AI versions 1 lets say
+	//simple min max algorithm , basis for weight is the number of goats not eaten yet
+	struct AI1 {
+		//The base game ai will evaluate upon
+		GameUnit base;
+		//Specifies the role of ai
+		bool isaitiger;
+		//Specifies whether goat or tiger is to be optimized,i.e ai should lose or win
+		bool isoptgoat;
+		//The level of evaluation the AI has to perform
+		int level;
+		//A vector of moves for use by ai1 
+		std::vector<std::pair<int, int>> moves;
+		//A move to order the current ai to perform first if invalid move then just perform without doing anything
+		std::pair<int, int> move;
+		//Final calculated weight will be stored in , favoured towards goat
+		float wt = 0;
+
+	};
+
+	//Some extra steps for proper recursion of lambda functions
+	std::function<std::pair<int, int>(AI1&)> runai1;
+
+	//AI version 1 runner
+	runai1 = [&](AI1& ai)->std::pair<int, int> {
+		
+		//perform the evaluation first
+		trymove(ai.move.first, ai.move.second, ai.base);
+
+		//updates the state of base game and obtains the set of moves if set of moves is empty
+		
+			ai.moves = updateGame(ai.base, ai.isaitiger);
+
+		//If not playable, or depth is final , set no of goats as wt and return invalid move
+		if ((ai.base.state != PLAY)||(ai.level<=0))  {
+			ai.wt = 20 - ai.base.neaten;
+			return std::pair<int, int>(-1, -1);
+		}
+
+		//Variable for child
+		AI1 child;
+		//Vector that stores list of most optimal moves
+		std::vector<std::pair<int, int>> optmoves;
+		//Set wt to least optimum value based on turn of ai
+		if (ai.isoptgoat)
+			ai.wt = -INFINITY;
+		else
+			ai.wt = +INFINITY;
+
+		for (auto step : ai.moves) {
+
+			//Reset child
+			child.base = ai.base;
+			child.isaitiger = !ai.isaitiger;
+			child.isoptgoat = ai.isoptgoat;
+			child.level = ai.level - 1;
+			child.moves.clear();
+			child.move = step;
+
+			//Discard the returning opt move as it is only used for top level
+			runai1(child);
+			
+			//if child has equal wt then add child to the list
+			if (ai.wt == child.wt)
+				optmoves.push_back(child.move);
+			else {
+				//Now if child is more optimal then clear the optimal list first
+				//If goat is to be optimized, choose child with greatest wt
+				if (ai.isoptgoat) {
+					if (child.wt > ai.wt) {
+						ai.wt = child.wt;
+						optmoves.clear();
+						optmoves.push_back(child.move);
+					}
+				}
+				//If tiger is to be optimized, choose child with lowest wt
+				else {
+					if (child.wt < ai.wt) {
+						ai.wt = child.wt;
+						optmoves.clear();
+						optmoves.push_back(child.move);
+					}
+				}
+			}
+		}
+
+		//Choose one randomly from optimal moves
+		if (optmoves.empty())
+			return std::pair<int, int>(-1, -1);
+		int index = GetRandomValue(0, optmoves.size() - 1);
+		return optmoves.at(index);
+
+
+
+
+	};
 
 	while (!WindowShouldClose()) {
 
-		if (main_game.state == PLAY)
+		if (main_game.state == PLAY) {
+			//if still playing , update game
 			updateGame(main_game, istiger);
 
-		//Filter mouse click event is game is not over
-		if ((main_game.state ==PLAY) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-			//store mouse clicked position 
-			Vector2 mpos = GetMousePosition();
+			//First check if ai is to be used
+			if ((istiger && istigerai) || (!istiger && isgoatai)) {
 
-			//compare mouse positon against game rectangle
-			if (CheckCollisionPointRec(mpos, gamerec)) {
+				AI1 ai;
+				ai.base = main_game;
+				ai.isaitiger = istiger;
+				ai.isoptgoat = !istiger;
+				ai.level = 2;
+				ai.move = std::pair<int, int>(-1, -1);
+				ai.moves.clear();
 
-				int boxn = coortobox(mpos.x, mpos.y);
+				std::pair<int, int> result = runai1(ai);
 
-				//If a box is indeed chosen
-				if (boxn >= 0) {
-
-					//If not selected already check if valid box is chosen and select or if goat to put , put
-					if (!isselect) {
-
-						//if goat can be put and is goat's turn then do that
-						if (!istiger && putgoat(boxn,main_game)) {
-							istiger = !istiger;
-						}
-						//If selected on tiger on tiger turn and ... select
-						else if(((main_game.board.at(boxn) == GOAT) != istiger)&&((main_game.board.at(boxn) == TIGER ) == istiger)) {
-							selectboxn = boxn;
-							isselect = true;
-						}
-
-					}
-					else {
-						//If can move , then move else reset selection
-						if (trymove(selectboxn, boxn, main_game)) {
-							isselect = false;
-							istiger = !istiger;
-						}
-						else  {
-							isselect = false;
-						}
-					}
+				if (trymove(result.first, result.second, main_game)) {
+					istiger = !istiger;
 				}
 
 
+
 			}
+			else {
 
+				//Filter mouse click event if ai is not to be used
+				if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+					//store mouse clicked position 
+					Vector2 mpos = GetMousePosition();
+
+					//compare mouse positon against game rectangle
+					if (CheckCollisionPointRec(mpos, gamerec)) {
+
+						int boxn = coortobox(mpos.x, mpos.y);
+
+						//If a box is indeed chosen
+						if (boxn >= 0) {
+
+							//If not selected already check if valid box is chosen and select or if goat to put , put
+							if (!isselect) {
+
+								//if goat can be put and is goat's turn then do that
+								if (!istiger && putgoat(boxn, main_game)) {
+									istiger = !istiger;
+								}
+								//If selected on tiger on tiger turn and ... select
+								else if (((main_game.board.at(boxn) == GOAT) != istiger) && ((main_game.board.at(boxn) == TIGER) == istiger)) {
+									selectboxn = boxn;
+									isselect = true;
+								}
+
+							}
+							else {
+								//If can move , then move else reset selection
+								if (trymove(selectboxn, boxn, main_game)) {
+									isselect = false;
+									istiger = !istiger;
+								}
+								else {
+									isselect = false;
+								}
+							}
+						}
+
+
+					}
+
+				}
+			}
 		}
-
-
 		ClearBackground(BLACK);
 		BeginDrawing();
 
