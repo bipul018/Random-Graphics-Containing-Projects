@@ -67,9 +67,9 @@ int baghchal() {
 	};
 
 	//rectangle to downsized rectangle for drawing purposes
-	auto downrec = [](Rectangle rin, float fac = (1.0/2)) {
-		rin.x += rin.width * fac *0.5;
-		rin.y += rin.height * fac*0.5;
+	auto downrec = [](Rectangle rin, float fac = (1.0 / 2)) {
+		rin.x += rin.width * fac * 0.5;
+		rin.y += rin.height * fac * 0.5;
 
 		rin.width *= fac;
 		rin.height *= fac;
@@ -85,27 +85,40 @@ int baghchal() {
 		TIGER
 	};
 
+	enum GameState {
+		PLAY,			//game is still on
+		DRAW,			//game is draw
+		T_WIN,			//tiger has won
+		G_WIN			//goat has won
+	};
+
 	//game informations 
 	using Board = std::array<char, 25>;
 
-	Board board;
-	unsigned ngoats = 0;
-	unsigned neaten = 0;
+	//A struct that entirely describes a game
+	struct GameUnit {
+		Board board;
+		unsigned ngoats = 0;
+		unsigned neaten = 0;
+
+		//game final state
+		GameState state = PLAY;
+	} main_game;
 
 	//additional game informations
 	//Variable to store selected box
 	int selectboxn = -1;
+
 	//Some bool flags that may mo may not be used
 	bool isselect = false;
 	bool istiger = false;			//Denotes turn of tiger or goat
 	bool istigerai = false;			//Denotes if tiger is to be played by an ai
 	bool isgoatai = false;			//Denotes if goat is to be played by an ai
-	bool isgameover = false;		//Will be true once game is over
 	bool isgamestart = true;		//To denote if game has startes
 
 
 	//Decided to hard code all transitions
-	//16 possible transitions where path 
+	//16 possible transitions where path
 	std::array<std::vector<int>, 16> transitions;
 
 	//fills rows and columns and diagonals
@@ -147,26 +160,94 @@ int baghchal() {
 		transitions.at(15).push_back(22 - 4 * i);
 	}
 	
-	//validates the move and moves the thing if possible so takes in board information
-	//Unfortunately this wont validate the trying to put goat in 
-	auto trymove = [&transitions](int from, int to, Board& board,unsigned& ngoats, unsigned &neaten) {
+	//Takes in board information and locations in transition sets to move from a cell to to a cell
+	//also takes another refrence variable at last for if a goat is eaten
+	//If from location and to location are equal it implies trying to put a goat
+	//Only works if game is not over 
+	//All invalid cases return false
+	auto checkmove = [&transitions](GameUnit &game, int tran_no, int fromloc, int toloc,int & empty) {
 
-		//returns false if trying to move to/from out of board or trying to move to same location
+		if (game.state != PLAY)
+			return false;
+		
+		if (tran_no < 0 || tran_no >= 16)
+			return false;
+
+		auto& tran = transitions.at(tran_no);
+
+		if (fromloc >= tran.size() || toloc >= tran.size() || fromloc < 0 || toloc < 0)
+			return false;
+
+		int to = tran.at(toloc);
+		int from = tran.at(fromloc);
+
+		//case for when goats are yet to be put
+		if (game.ngoats < 20) {
+			//If goat is yet to be put and goat is encountered
+			if (game.board.at(from) == GOAT)
+				return false;
+
+			//Else check for putting goat , this is really inefficient so as possible avoid this case
+			if (from == to) {
+				return (game.board.at(from) == NONE);
+			}
+
+		}
+
+		//if to is empty , transition may be possible
+		if (game.board.at(to) == NONE) {
+			//If consecutive then just move
+			if (abs(fromloc - toloc) == 1) {
+				empty = -1;
+				return true;
+			}
+
+			//else if from is tiger, from and to are 2 units apart and there is a goat in between
+			//since each elements in each transitions are in arithmetic progression , from and to average works!!!
+			if ((game.board.at(from) == TIGER) && (abs(fromloc - toloc) == 2) && (game.board.at((from + to) / 2) == GOAT)) {
+				empty = (from + to) / 2;
+				return true;
+			}
+		}
+		//if none of above work then not possible
+		return false;
+	};
+	
+	//Tries to move and moves if possible , takes in board positions and finds thier transitions for movement
+	//If from == to then goat is to be put
+	auto trymove = [&transitions,&checkmove](int from, int to, GameUnit & game) {
+
+		//If game is already over
+		if (game.state != PLAY)
+			return false;
+
+		//returns false if trying to move to/from out of board 
 		if (from < 0 || to < 0 || from >= 25 || to >= 25 )
 			return false;
 
-		//determine if from is empty or not
-		if (board.at(from) == NONE)
-			return false;
+		//Case for if goat has yet to be put
+		if (game.ngoats < 20) {
 
-		//if from has goat but goat is yet to be put
-		if ((board.at(from) == GOAT) && ngoats < 20)
-			return false;
+			//Trying to move goat when goat is left
+			if (game.board.at(from) == GOAT)
+				return false;
 
+			//Trying to put goat
+			if (from == to) {
+
+				if (game.board.at(from) == NONE) {
+					game.board.at(from) = GOAT;
+					game.ngoats++;
+					return true;
+				}
+				else
+					return false;
+			}
+		}
 
 		//find the transition group containing both from and to
-		for (auto& tran : transitions) {
-
+		for (int tn = 0; tn < transitions.size();++tn) {
+			auto& tran = transitions.at(tn);
 			//records a valid position if from and to are found else -1
 			int fromloc = -1;
 			int	toloc = -1;
@@ -181,26 +262,18 @@ int baghchal() {
 
 			//if both are in tran decide whether move is possible
 			if (fromloc >= 0 && toloc >= 0) {
-
-				//if consecutive and to is empty , transition is possible
-				if ((board.at(to) == NONE) && (abs(fromloc - toloc) == 1)) {
-					board.at(to) = board.at(from);
-					board.at(from) = NONE;
+				int eatpos = -1;
+				if (checkmove(game, tn, fromloc, toloc, eatpos)) {
+					game.board.at(to) = game.board.at(from);
+					game.board.at(from) = NONE;
+					if (eatpos > 1) {
+						game.board.at(eatpos) = NONE;
+						game.neaten++;
+					}
 					return true;
 				}
-
-				//else if from is tiger, from and to are 2 units apart and there is a goat in between
-				//since each elements in each transitions are in arithmetic progression , from and to average works!!!
-				if ((board.at(from) == TIGER) && (abs(fromloc - toloc) == 2) && (board.at((from + to) / 2) == GOAT)) {
-					board.at(to) = TIGER;
-					board.at((from + to) / 2) = NONE;
-					board.at(from) = NONE;
-					neaten++;
-					return true;
-				}
-
-				//if none of above work then not possible
-				return false;
+				else
+					return false;
 			}
 
 		}
@@ -208,16 +281,19 @@ int baghchal() {
 
 	};
 
-	//Yet another function just for putting goats only
-	auto putgoat = [](int to, Board& board, unsigned& ngoats) {
-		if (to < 0 || to >= 25)
-			return false;
-		if (ngoats >= 20)
-			return false;
-		if (board.at(to) != NONE)
-			return false;
-		board.at(to) = GOAT;
-		ngoats++;
+	//Proxy function for putting goats
+	auto putgoat = [&trymove](int to, GameUnit& game) {
+		return trymove(to, to, game);
+	};
+
+	//Function to update game status
+	auto isover = [&trymove, &putgoat](Board& board, unsigned& ngoats, unsigned& neaten, bool& iseaten) {
+
+		std::vector<std::pair<int, int>> moves;
+
+
+
+
 	};
 
 	//string to initialize game
@@ -229,18 +305,18 @@ t---t\
 -----\
 t---t";
 
-	//board filler helper function
-	auto fillboard = [&board](std::string input) {
+	//board filler helper function , maybe in future initializes game too
+	auto fillboard = [](std::string input,GameUnit &game) {
 		for (int i = 0; i < 25; ++i) {
 			switch (input[i]) {
 			case 't':
-				board[i] = TIGER;
+				game.board[i] = TIGER;
 				break;
 			case 'g':
-				board[i] = GOAT;
+				game.board[i] = GOAT;
 				break;
 			case '-':
-				board[i] = NONE;
+				game.board[i] = NONE;
 				break;
 			default:
 				return;
@@ -248,7 +324,7 @@ t---t";
 		}
 	};
 
-	fillboard(defaultboard);
+	fillboard(defaultboard,main_game);
 
 	//load tiger and goat images
 	Image tiger= LoadImage("tiger.png");
@@ -270,7 +346,7 @@ t---t";
 	while (!WindowShouldClose()) {
 
 		//Filter mouse click event is game is not over
-		if (!isgameover && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+		if ((main_game.state ==PLAY) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
 			//store mouse clicked position 
 			Vector2 mpos = GetMousePosition();
 
@@ -286,11 +362,11 @@ t---t";
 					if (!isselect) {
 
 						//if goat can be put and is goat's turn then do that
-						if (!istiger && putgoat(boxn,board,ngoats)) {
+						if (!istiger && putgoat(boxn,main_game)) {
 							istiger = !istiger;
 						}
 						//If selected on tiger on tiger turn and ... select
-						else if(((board.at(boxn) == GOAT) != istiger)&&((board.at(boxn) == TIGER ) == istiger)) {
+						else if(((main_game.board.at(boxn) == GOAT) != istiger)&&((main_game.board.at(boxn) == TIGER ) == istiger)) {
 							selectboxn = boxn;
 							isselect = true;
 						}
@@ -298,7 +374,7 @@ t---t";
 					}
 					else {
 						//If can move , then move else reset selection
-						if (trymove(selectboxn, boxn, board, ngoats, neaten)) {
+						if (trymove(selectboxn, boxn, main_game)) {
 							isselect = false;
 							istiger = !istiger;
 						}
@@ -368,10 +444,10 @@ t---t";
 
 			//continue;
 
-			if (board[i] == TIGER) {
+			if (main_game.board[i] == TIGER) {
 				DrawTexture(tigertex, drawrec.x, drawrec.y, WHITE);
 			}
-			if (board[i] == GOAT) {
+			if (main_game.board[i] == GOAT) {
 				DrawTexture(goattex, drawrec.x, drawrec.y, WHITE);
 
 			}
