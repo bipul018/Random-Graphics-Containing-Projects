@@ -165,7 +165,7 @@ int baghchal() {
 	//If from location and to location are equal it implies trying to put a goat
 	//Only works if game is not over 
 	//All invalid cases return false
-	auto checkmove = [&transitions](GameUnit &game, int tran_no, int fromloc, int toloc,int & empty) {
+	auto checkmove = [&transitions](const GameUnit &game, int tran_no, int fromloc, int toloc,int & empty) {
 
 		if (game.state != PLAY)
 			return false;
@@ -286,12 +286,86 @@ int baghchal() {
 		return trymove(to, to, game);
 	};
 
-	//Function to update game status
-	auto isover = [&trymove, &putgoat](Board& board, unsigned& ngoats, unsigned& neaten, bool& iseaten) {
+	//Returns the possible moves based on given game and whether it is goat or tiger we require
+	auto getmoves = [&transitions, &checkmove](const GameUnit& game, bool isGoat) {
 
+		//The vector of pairs of locations on board
 		std::vector<std::pair<int, int>> moves;
+		
+		//If not playable
+		if (game.state != PLAY)
+			return moves;
+
+		//If max no of goats are eaten
+		if (game.neaten >= 5)
+			return moves;
+
+		//Pre reserve some amount of space for moves
+		moves.reserve(16);
+
+		//If goat is yet to be placed and is goat turn
+		if (isGoat && (game.ngoats < 20)) {
+			for (int i = 0; i < game.board.size(); ++i)
+				if (game.board.at(i) == NONE)
+					moves.push_back(std::pair<int, int>(i, i));
+			return moves;
+		}
+
+		//Else go to each transition sets now checking for goat or tiger it is
+		Piece curr = ((isGoat) ? GOAT : TIGER);
+
+		//go through each set
+		for (int tn = 0; tn < transitions.size(); ++tn) {
+			auto& tran = transitions.at(tn);
+
+			//For each element of set
+			for (int from = 0; from < tran.size(); ++from) {
+
+				//With each another element of that set
+				for (int to = 0; to < tran.size(); ++to) {
+
+					//If the from element has our desired piece
+					if (game.board.at(tran.at(from)) == curr) {
+						int dummy;
+						//If the move is possible
+						if (checkmove(game, tn, from, to, dummy)) {
+							moves.push_back(std::pair<int, int>(tran.at(from), tran.at(to)));
+						}
+					}
 
 
+				}
+			}
+
+		}
+
+		return moves;
+
+	};
+
+	//Updates the game state , also takes in whether it's tiger's turn or not returns if playable
+	auto updateGame = [&getmoves](GameUnit& game, bool istiger) {
+
+		if (game.state != PLAY)
+			return false;
+
+		if (game.neaten >= 5) {
+			game.state = T_WIN;
+			return false;
+		}
+
+		auto moves = getmoves(game, !istiger);
+
+		if (istiger && moves.empty()) {
+			game.state = G_WIN;
+			return false;
+		}
+
+		if (!istiger && moves.empty()) {
+			game.state = DRAW;
+			return false;
+		}
+		return true;
 
 
 	};
@@ -344,6 +418,9 @@ t---t";
 	
 
 	while (!WindowShouldClose()) {
+
+		if (main_game.state == PLAY)
+			updateGame(main_game, istiger);
 
 		//Filter mouse click event is game is not over
 		if ((main_game.state ==PLAY) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
@@ -466,6 +543,29 @@ t---t";
 				radius = rec.height / 2;
 			DrawCircle(rec.x + rec.width / 2, rec.y + rec.height / 2, radius, c);
 
+		}
+
+		//If game is not playable print in big letters
+		{
+
+			switch (main_game.state) {
+			case DRAW:
+				Color c = RED;
+				c.a = 150;
+				DrawText("GAME\nDRAW", gamerec.x + gamerec.width / 3, gamerec.y + gamerec.height / 3, gamerec.width / 15, c);
+				break;
+			case T_WIN:
+				c = GREEN;
+				c.a = 150;
+				DrawText("TIGER\nWINS", gamerec.x + gamerec.width / 3, gamerec.y + gamerec.height / 3, gamerec.width / 15, c);
+				break;
+			case G_WIN:
+				c = GREEN;
+				c.a = 150;
+				DrawText("GOAT\nWINS", gamerec.x + gamerec.width / 3, gamerec.y + gamerec.height / 3, gamerec.width / 15, c);
+				break;
+
+			}
 		}
 		EndDrawing();
 
