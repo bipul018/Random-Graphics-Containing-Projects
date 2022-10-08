@@ -474,7 +474,7 @@ t---t";
 			//Reset child
 			child.base = ai.base;
 			child.isaitiger = !ai.isaitiger;
-			child.isoptgoat = ai.isoptgoat;
+			child.isoptgoat = !ai.isoptgoat;
 			child.level = ai.level - 1;
 			child.moves.clear();
 			child.move = step;
@@ -530,7 +530,7 @@ t---t";
 				ai.base = main_game;
 				ai.isaitiger = istiger;
 				ai.isoptgoat = !istiger;
-				ai.level = 2;
+				ai.level = 5;
 				ai.move = std::pair<int, int>(-1, -1);
 				ai.moves.clear();
 
