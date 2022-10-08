@@ -112,8 +112,8 @@ int baghchal() {
 
 	//Some bool flags that may mo may not be used
 	bool isselect = false;
-	bool istiger = false;			//Denotes turn of tiger or goat
-	bool istigerai = false;			//Denotes if tiger is to be played by an ai
+	bool istiger = true;			//Denotes turn of tiger or goat
+	bool istigerai = true;			//Denotes if tiger is to be played by an ai
 	bool isgoatai = true;			//Denotes if goat is to be played by an ai
 	bool isgamestart = true;		//To denote if game has startes
 
@@ -381,9 +381,17 @@ t---t\
 -----\
 -----\
 t---t";
+	const char trialboard[] =
+		"\
+ggggg\
+ggggg\
+ggggg\
+gt-tg\
+gtggt";
 
 	//board filler helper function , maybe in future initializes game too
 	auto fillboard = [](std::string input,GameUnit &game) {
+		
 		for (int i = 0; i < 25; ++i) {
 			switch (input[i]) {
 			case 't':
@@ -391,6 +399,7 @@ t---t";
 				break;
 			case 'g':
 				game.board[i] = GOAT;
+				game.ngoats++;
 				break;
 			case '-':
 				game.board[i] = NONE;
@@ -402,6 +411,7 @@ t---t";
 	};
 
 	fillboard(defaultboard,main_game);
+	fillboard(trialboard,main_game);
 
 	//load tiger and goat images
 	Image tiger= LoadImage("tiger.png");
@@ -451,11 +461,36 @@ t---t";
 
 		//updates the state of base game and obtains the set of moves if set of moves is empty
 		
-			ai.moves = updateGame(ai.base, ai.isaitiger);
+		ai.moves = updateGame(ai.base, ai.isaitiger);
 
 		//If not playable, or depth is final , set no of goats as wt and return invalid move
 		if ((ai.base.state != PLAY)||(ai.level<=0))  {
-			ai.wt = 20 - ai.base.neaten;
+			//letting weight = no of goat not eaten
+			ai.wt = (5 - ai.base.neaten)/5.0;
+
+			////letting weight = no of goat moves - no of tiger moves
+			////first calc moves from opposite piece view
+			//auto oppmoves = getmoves(ai.base, !ai.isaitiger);
+			////Consider isaitiger is true for goat favoured wt
+			//ai.wt = oppmoves.size() - ai.moves.size();
+			//
+			////If ai is not tiger then invert sign
+			//if (!ai.isaitiger)
+			//	ai.wt = -ai.wt;
+			//
+			////Now divide by sum of possible moves to limit inside +-1
+			//
+			//ai.wt /= (oppmoves.size() + ai.moves.size());
+			//
+			////Now combine with complement ratio of goats eaten to can be eaten
+			//ai.wt = ((5 - ai.base.neaten) / 5) * 0.7 + 0.3 * ai.wt;
+			//
+			////if goat or tiger wins then make value equal to +-1
+			//if (ai.base.state == G_WIN)
+			//	ai.wt = 1;
+			//else if (ai.base.state == T_WIN)
+			//	ai.isaitiger = -1;
+
 			return std::pair<int, int>(-1, -1);
 		}
 
@@ -470,6 +505,12 @@ t---t";
 			ai.wt = +INFINITY;
 
 		for (auto step : ai.moves) {
+
+			//Debug breakpoint helper
+			if ((ai.move.first == -1) && (step.first == 4)) {
+				int in = 9;
+				in = 9 + in * in;
+			}
 
 			//Reset child
 			child.base = ai.base;
@@ -506,6 +547,13 @@ t---t";
 			}
 		}
 
+		//Debug breakpoint helper
+		if (ai.move.first == -1) {
+			int in = 9;
+			in = 9 + in * in;
+		}
+		
+
 		//Choose one randomly from optimal moves
 		if (optmoves.empty())
 			return std::pair<int, int>(-1, -1);
@@ -517,6 +565,11 @@ t---t";
 
 	};
 
+	//A time delay for when both ai are enabled so as to be able to view the results
+	double aitimer = GetTime();
+	//The delay amount in seconds
+	double aiwait = 0.7;
+
 	while (!WindowShouldClose()) {
 
 		if (main_game.state == PLAY) {
@@ -526,21 +579,26 @@ t---t";
 			//First check if ai is to be used
 			if ((istiger && istigerai) || (!istiger && isgoatai)) {
 
-				AI1 ai;
-				ai.base = main_game;
-				ai.isaitiger = istiger;
-				ai.isoptgoat = !istiger;
-				ai.level = 5;
-				ai.move = std::pair<int, int>(-1, -1);
-				ai.moves.clear();
+				//If both ai are enabled , skip this part
+				if (!istigerai || !isgoatai || (GetTime() > (aitimer + aiwait))) {
+					aitimer = GetTime();
 
-				std::pair<int, int> result = runai1(ai);
+					AI1 ai;
+					ai.base = main_game;
+					ai.isaitiger = istiger;
+					ai.isoptgoat = !istiger;
+					ai.level = 3;
+					if (main_game.ngoats >= 20)
+						ai.level += 0;
+					ai.move = std::pair<int, int>(-1, -1);
+					ai.moves.clear();
 
-				if (trymove(result.first, result.second, main_game)) {
-					istiger = !istiger;
+					std::pair<int, int> result = runai1(ai);
+
+					if (trymove(result.first, result.second, main_game)) {
+						istiger = !istiger;
+					}
 				}
-
-
 
 			}
 			else {
