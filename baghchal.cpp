@@ -112,7 +112,7 @@ int baghchal() {
 
 	//Some bool flags that may mo may not be used
 	bool isselect = false;
-	bool istiger = true;			//Denotes turn of tiger or goat
+	bool istiger = false;			//Denotes turn of tiger or goat
 	bool istigerai = true;			//Denotes if tiger is to be played by an ai
 	bool isgoatai = true;			//Denotes if goat is to be played by an ai
 	bool isgamestart = true;		//To denote if game has startes
@@ -411,7 +411,7 @@ gtggt";
 	};
 
 	fillboard(defaultboard,main_game);
-	fillboard(trialboard,main_game);
+	//fillboard(trialboard,main_game);
 
 	//load tiger and goat images
 	Image tiger= LoadImage("tiger.png");
@@ -429,6 +429,9 @@ gtggt";
 	Texture2D goattex = LoadTextureFromImage(goat);
 
 	//Now begins the AI part, completely experimental
+
+	//Let's try neural networks evolution stuff
+	
 
 	//AI versions 1 lets say
 	//simple min max algorithm , basis for weight is the number of goats not eaten yet
@@ -468,28 +471,35 @@ gtggt";
 			//letting weight = no of goat not eaten
 			ai.wt = (5 - ai.base.neaten)/5.0;
 
-			////letting weight = no of goat moves - no of tiger moves
-			////first calc moves from opposite piece view
-			//auto oppmoves = getmoves(ai.base, !ai.isaitiger);
-			////Consider isaitiger is true for goat favoured wt
-			//ai.wt = oppmoves.size() - ai.moves.size();
+			//Let's add one more form of wt measurement
+			//For each group in transitions if there is both tiger and goat together 
+			//Add ratio of empty places to total places in the group
+
+
+			//for (auto& tran : transitions) {
 			//
-			////If ai is not tiger then invert sign
-			//if (!ai.isaitiger)
-			//	ai.wt = -ai.wt;
+			//	float ng = 0;
+			//	float nt = 0;
+			//	for (auto& tn : tran) {
+			//		switch (ai.base.board.at(tn)) {
+			//		case TIGER:
+			//			nt += 1;
+			//			break;
+			//		case GOAT:
+			//			ng += 1;
+			//			break;
+			//		}
+			//	}
+			//	if (ng > 0 && nt > 0) {
+			//		ai.wt -= ( ng - nt) / tran.size();
+			//	}
 			//
-			////Now divide by sum of possible moves to limit inside +-1
-			//
-			//ai.wt /= (oppmoves.size() + ai.moves.size());
-			//
-			////Now combine with complement ratio of goats eaten to can be eaten
-			//ai.wt = ((5 - ai.base.neaten) / 5) * 0.7 + 0.3 * ai.wt;
-			//
-			////if goat or tiger wins then make value equal to +-1
-			//if (ai.base.state == G_WIN)
-			//	ai.wt = 1;
-			//else if (ai.base.state == T_WIN)
-			//	ai.isaitiger = -1;
+			//}
+			//If won/lost then set wt accordingly
+			if (ai.base.state == T_WIN)
+				ai.wt = -INFINITY;
+			if (ai.base.state == G_WIN)
+				ai.wt = INFINITY;
 
 			return std::pair<int, int>(-1, -1);
 		}
@@ -507,6 +517,7 @@ gtggt";
 		for (auto step : ai.moves) {
 
 			//Debug breakpoint helper
+
 			if ((ai.move.first == -1) && (step.first == 4)) {
 				int in = 9;
 				in = 9 + in * in;
@@ -587,9 +598,9 @@ gtggt";
 					ai.base = main_game;
 					ai.isaitiger = istiger;
 					ai.isoptgoat = !istiger;
-					ai.level = 3;
+					ai.level = 4;
 					if (main_game.ngoats >= 20)
-						ai.level += 0;
+						ai.level +=2;
 					ai.move = std::pair<int, int>(-1, -1);
 					ai.moves.clear();
 
@@ -691,16 +702,6 @@ gtggt";
 
 			Rectangle drawrec = downrec(boxtorec(i));
 
-			//Prints row,col instead of actual pieces
-			//int row;
-			//int col;
-			//boxtorowcol(i, row, col);
-
-			//std::string str = std::to_string(row) + "," + std::to_string(col);
-
-			//DrawText(str.c_str(), drawrec.x, drawrec.y, drawrec.width / str.length(), YELLOW);
-
-			//continue;
 
 			if (main_game.board[i] == TIGER) {
 				DrawTexture(tigertex, drawrec.x, drawrec.y, WHITE);
@@ -709,6 +710,17 @@ gtggt";
 				DrawTexture(goattex, drawrec.x, drawrec.y, WHITE);
 
 			}
+			////Prints row,col instead of actual pieces
+			//int row;
+			//int col;
+			//boxtorowcol(i, row, col);
+			//
+			//std::string str = std::to_string(row) + "," + std::to_string(col);
+			//
+			//Color c = RAYWHITE;
+			//c.a = 190;
+			//DrawText(str.c_str(), drawrec.x, drawrec.y, drawrec.width / str.length(), c);
+			
 
 		}
 

@@ -1,5 +1,7 @@
+
+#define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
-#include <Windows.h>
+#include "MyGUI.h"
 int sudoku();
 int emfield();
 int chess();
@@ -23,7 +25,7 @@ struct MyColor {
 
 int main() {
 
-	std::cout << "Enter e for em simulation and s for sudoku :  c for chess:\n h for coaster: b for baghchal:";
+	std::cout << "Enter e for em simulation and s for sudoku :  c for chess:\n h for coaster: b for baghchal:\ng : guitest";
 	char c = 'x';
 	std::cin >> c;
 	
@@ -40,6 +42,8 @@ int main() {
 		return coaster();
 	case 'b':
 		return baghchal();
+	case 'g':
+		return guitest();
 	}
 
 }
