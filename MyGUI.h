@@ -1,6 +1,5 @@
 #pragma once
 #include "raylib-cpp.hpp"
-#include "extras/raygui.h"
 
 //A function that does or/union of rectangles , that results a rectangles including both 
 raylib::Rectangle operator | (raylib::Rectangle r1, raylib::Rectangle r2);
@@ -18,6 +17,8 @@ public:
 	virtual void relocate(raylib::Rectangle rec,float facx, float facy);
 	//Plain old shifting function
 	virtual void shift(float dx, float dy);
+	//Resizes keeping center intact
+	virtual void resize(float fac);
 	raylib::Rectangle box;
 	inline virtual ~GUIUnit() {}
 };
@@ -30,6 +31,7 @@ public:
 	 virtual void stackChildren(bool isVertical = true, bool resizeToFit = true);
 	 void relocate(raylib::Rectangle rec, float facx, float facy) override;
 	 void shift(float dx, float dy) override;
+	 virtual void resize(float fac) override;
 	 std::vector<GUIUnit*> units;
 };
 
@@ -37,9 +39,10 @@ class Button : public GUIUnit {
 public:
 	bool isactive = false;
 	std::string msg = "Button";
-	int txtSize = 16;
+	int txtSize = 29;
 	void doStuff() override;
 	void packToUnits() override;
+	void resize(float fac) override;
 };
 
 class Panel : public GUIContainer {
@@ -60,25 +63,27 @@ public:
 class GroupBox : public GUIContainer {
 public:
 	std::string title = "Group Title";
-	int txtSize = 23;
+	int txtSize = 33;
 	void doStuff() override;
 	void packToUnits() override;
+	void resize(float fac) override;
 };
 
 class Label : public GUIUnit {
 public:
 
 	std::string msg = "Label";
-	int txtSize = 16;
+	int txtSize = 29;
 	void doStuff() override;
 	void packToUnits() override;
+	void resize(float fac) override;
 
 };
 
 class TextBox : public GUIUnit {
 
 public:
-	int txtSize = 16;
+	int txtSize = 29;
 	unsigned maxSize = 0;		//0 implies infinite actually
 	bool enterPressed = false;
 	bool editable = false;
@@ -90,6 +95,7 @@ public:
 	void setStr(const char* str);
 	void doStuff() override;
 	void packToUnits() override;
+	void resize(float fac) override;
 private:
 	std::vector<char> data;
 };
@@ -98,16 +104,16 @@ class Toggle : public GUIUnit {
 public:
 
 	std::string msg = "Toggle";
-	int txtSize = 16;
+	int txtSize = 29;
 	bool isactive = false;
 	void doStuff() override;
 	void packToUnits() override;
-
+	void resize(float fac) override;
 };
 
 class Slider : public GUIUnit {
 public:
-	int txtSize = 13;
+	int txtSize = 23;
 	std::string leftmsg = "0.0";
 	std::string rightmsg = "1.0";
 	float leftval = 0;
@@ -117,18 +123,28 @@ public:
 	void doStuff() override;
 	//This only sets height of the slider by the text size
 	void packToUnits() override;
+	void resize(float fac) override;
+};
+
+class ScrollBar : public GUIUnit {
+public:
+	int value;
+	int minValue;
+	int maxValue;
+	void doStuff() override;
 };
 
 //Have to change the just changed flag to bring about any change
 class DropBox : public GUIUnit {
 public:
-	int txtSize = 13;
+	int txtSize = 23;
 	std::vector<std::string> list;
 	bool justchanged = true;
 	int choice = 0;
 	bool editmode = false;
 
 	void doStuff() override;
+	void resize(float fac) override;
 	void packToUnits() override;
 
 	~DropBox();

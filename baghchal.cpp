@@ -1,9 +1,10 @@
 #include <raylib-cpp.hpp>
+#include "MyGUI.h"
 #include <array>
 #include <functional>
 
 int baghchal() {
-	int width = 900;
+	int width = 1200;
 	int height = 900;
 
 	InitWindow(width, height, "Tiger Move");
@@ -13,8 +14,82 @@ int baghchal() {
 	Rectangle gamerec;
 	gamerec.x = 0;
 	gamerec.y = 0;
-	gamerec.width = width;
+	gamerec.width = width*0.8;
 	gamerec.height = height;
+
+	//Remaining rectangle
+	Rectangle guirec;
+	guirec.x = gamerec.x + gamerec.width;
+	guirec.y = gamerec.y;
+	guirec.width = width - guirec.x;
+	guirec.height = gamerec.height;
+
+	//All required GUI elements are to be introduced here
+	//Introduction panel, ie startup panel
+	Panel intropan;
+	intropan.box = guirec;
+
+	//Human or ai selection
+	Label ply1;
+	ply1.msg = "Player 1";
+
+	DropBox play1by;
+	play1by.list.push_back("Human");
+	play1by.list.push_back("Computer");
+
+	Panel plygrp1;
+	plygrp1.units.push_back(&ply1);
+	plygrp1.units.push_back(&play1by);
+
+	Label ply2;
+	ply2.msg = "Player 2";
+
+	DropBox play2by = play1by;
+
+	Panel plygrp2;
+	plygrp2.units.push_back(&ply2);
+	plygrp2.units.push_back(&play2by);
+
+	GroupBox settgrp;
+	settgrp.title = "Setup";
+	settgrp.units.push_back(&plygrp1);
+	settgrp.units.push_back(&plygrp2);
+
+
+	Button playbut;
+	playbut.msg = "PLAY";
+
+	intropan.units.push_back(&playbut);
+	intropan.units.push_back(&settgrp);
+
+	auto resetStartUI = [&]() {
+
+		playbut.packToUnits();
+
+		ply1.packToUnits();
+		ply2.packToUnits();
+
+		play1by.justchanged = true;
+		play2by.justchanged = true;
+		play1by.packToUnits();
+		play2by.packToUnits();
+
+		plygrp1.stackChildren(true);
+		plygrp2.stackChildren(true);
+
+		plygrp1.packToUnits();
+		plygrp2.packToUnits();
+
+		settgrp.stackChildren(false);
+		settgrp.packToUnits();
+
+
+		intropan.stackChildren(true);
+		
+	};
+
+	//Do all intial resizing stuff of gui
+	resetStartUI();
 
 	//coordinate to vertex number fxn
 	//let's number it this way for now :
@@ -115,7 +190,7 @@ int baghchal() {
 	bool istiger = false;			//Denotes turn of tiger or goat
 	bool istigerai = true;			//Denotes if tiger is to be played by an ai
 	bool isgoatai = true;			//Denotes if goat is to be played by an ai
-	bool isgamestart = true;		//To denote if game has startes
+	bool isgamestart = false;		//To denote if game has startes
 
 
 	//Decided to hard code all transitions
@@ -581,82 +656,106 @@ gtggt";
 	//The delay amount in seconds
 	double aiwait = 0.7;
 
+
 	while (!WindowShouldClose()) {
 
-		if (main_game.state == PLAY) {
-			//if still playing , update game
-			updateGame(main_game, istiger);
+		//Stuff for when game has not started
+		if (!isgamestart) {
 
-			//First check if ai is to be used
-			if ((istiger && istigerai) || (!istiger && isgoatai)) {
+			if (playbut.isactive) {
 
-				//If both ai are enabled , skip this part
-				if (!istigerai || !isgoatai || (GetTime() > (aitimer + aiwait))) {
-					aitimer = GetTime();
+				isgoatai = (play1by.choice == 1);
+				istigerai = (play2by.choice == 1);
 
-					AI1 ai;
-					ai.base = main_game;
-					ai.isaitiger = istiger;
-					ai.isoptgoat = !istiger;
-					ai.level = 4;
-					if (main_game.ngoats >= 20)
-						ai.level +=2;
-					ai.move = std::pair<int, int>(-1, -1);
-					ai.moves.clear();
+				isgamestart = true;
 
-					std::pair<int, int> result = runai1(ai);
-
-					if (trymove(result.first, result.second, main_game)) {
-						istiger = !istiger;
-					}
-				}
 
 			}
-			else {
 
-				//Filter mouse click event if ai is not to be used
-				if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-					//store mouse clicked position 
-					Vector2 mpos = GetMousePosition();
+		}
+		//Stuff for when game has started
+		else {
+			if (main_game.state == PLAY) {
+				//if still playing , update game
+				updateGame(main_game, istiger);
 
-					//compare mouse positon against game rectangle
-					if (CheckCollisionPointRec(mpos, gamerec)) {
+				//First check if ai is to be used
+				if ((istiger && istigerai) || (!istiger && isgoatai)) {
 
-						int boxn = coortobox(mpos.x, mpos.y);
+					//If both ai are enabled , skip this part
+					if (!istigerai || !isgoatai || (GetTime() > (aitimer + aiwait))) {
+						aitimer = GetTime();
 
-						//If a box is indeed chosen
-						if (boxn >= 0) {
+						AI1 ai;
+						ai.base = main_game;
+						ai.isaitiger = istiger;
+						ai.isoptgoat = !istiger;
+						ai.level = 4;
+						if (main_game.ngoats >= 20)
+							ai.level += 2;
+						ai.move = std::pair<int, int>(-1, -1);
+						ai.moves.clear();
 
-							//If not selected already check if valid box is chosen and select or if goat to put , put
-							if (!isselect) {
+						std::pair<int, int> result = runai1(ai);
 
-								//if goat can be put and is goat's turn then do that
-								if (!istiger && putgoat(boxn, main_game)) {
-									istiger = !istiger;
-								}
-								//If selected on tiger on tiger turn and ... select
-								else if (((main_game.board.at(boxn) == GOAT) != istiger) && ((main_game.board.at(boxn) == TIGER) == istiger)) {
-									selectboxn = boxn;
-									isselect = true;
-								}
-
-							}
-							else {
-								//If can move , then move else reset selection
-								if (trymove(selectboxn, boxn, main_game)) {
-									isselect = false;
-									istiger = !istiger;
-								}
-								else {
-									isselect = false;
-								}
-							}
+						if (trymove(result.first, result.second, main_game)) {
+							istiger = !istiger;
 						}
-
-
 					}
 
 				}
+				else {
+
+					//Filter mouse click event if ai is not to be used
+					if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+						//store mouse clicked position 
+						Vector2 mpos = GetMousePosition();
+
+						//compare mouse positon against game rectangle
+						if (CheckCollisionPointRec(mpos, gamerec)) {
+
+							int boxn = coortobox(mpos.x, mpos.y);
+
+							//If a box is indeed chosen
+							if (boxn >= 0) {
+
+								//If not selected already check if valid box is chosen and select or if goat to put , put
+								if (!isselect) {
+
+									//if goat can be put and is goat's turn then do that
+									if (!istiger && putgoat(boxn, main_game)) {
+										istiger = !istiger;
+									}
+									//If selected on tiger on tiger turn and ... select
+									else if (((main_game.board.at(boxn) == GOAT) != istiger) && ((main_game.board.at(boxn) == TIGER) == istiger)) {
+										selectboxn = boxn;
+										isselect = true;
+									}
+
+								}
+								else {
+									//If can move , then move else reset selection
+									if (trymove(selectboxn, boxn, main_game)) {
+										isselect = false;
+										istiger = !istiger;
+									}
+									else {
+										isselect = false;
+									}
+								}
+							}
+
+
+						}
+
+					}
+				}
+			}
+
+			else {
+
+
+
 			}
 		}
 		ClearBackground(BLACK);
@@ -693,7 +792,7 @@ gtggt";
 
 		//Draw shorter diagonals
 		DrawLine(midrec.x, firstrec.y, firstrec.x, midrec.y, WHITE);
-		DrawLine(midrec.x, firstrec.y, lastrec.y, midrec.y, WHITE);
+		DrawLine(midrec.x, firstrec.y, lastrec.x, midrec.y, WHITE);
 		DrawLine(midrec.x, lastrec.y, firstrec.x, midrec.y, WHITE);
 		DrawLine(midrec.x, lastrec.y, lastrec.x, midrec.y, WHITE);
 
@@ -760,6 +859,11 @@ gtggt";
 
 			}
 		}
+
+		//If start page then do that
+		if (!isgamestart)
+			intropan.doStuff();
+
 		EndDrawing();
 
 	}

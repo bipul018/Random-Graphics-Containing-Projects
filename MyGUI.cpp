@@ -36,6 +36,7 @@ raylib::Rectangle operator&(raylib::Rectangle r1, raylib::Rectangle r2) {
 	return res;
 }
 
+
 void GUIContainer::doStuff() {
 	for (auto& u : units)
 		u->doStuff();
@@ -90,7 +91,7 @@ void GUIContainer::stackChildren(bool isVertical, bool resizeToFit) {
 					maxwid = getw(u->box);
 	}
 
-	float curry = geth(box);
+	float curry = gety(box);
 
 	//Currently this aligns center
 	float midx = getx(box) + getw(box) * 0.5;
@@ -159,6 +160,14 @@ void GUIContainer::shift(float dx, float dy) {
 		u->shift(dx, dy);
 }
 
+void GUIContainer::resize(float fac) {
+	GUIUnit::resize(fac);
+	for (auto u : units) {
+		if (u != nullptr)
+			u->resize(fac);
+	}
+}
+
 void GUIContainer::packToUnits() {
 	if (units.empty()) {
 		box.width = 0;
@@ -225,6 +234,16 @@ void GUIUnit::shift(float dx, float dy) {
 	box.y += dy;
 }
 
+void GUIUnit::resize(float fac) {
+	box.x += box.width * 0.5;
+	box.y += box.height * 0.5;
+
+	box.width *= fac;
+	box.height *= fac;
+
+	box.x -= box.width * 0.5;
+	box.y -= box.height * 0.5;
+}
 
 int guitest() {
 	int width = 1200;
@@ -238,7 +257,7 @@ int guitest() {
 	exit.packToUnits();
 	TextBox noexit;
 	noexit.setStr("_");
-	noexit.editable = true;
+	noexit.editable = false;
 	noexit.maxSize = 10;
 	noexit.txtSize = 40;
 	noexit.packToUnits();
@@ -274,11 +293,17 @@ int guitest() {
 	//Now let's fill remaining region of panh extended by panv through droplist dropp
 	dropp.box.width = panh.box.width - noexit.box.width - exit.box.width;
 
+	int vvv = 100;
+	bool edit = false;
+
 	while (!WindowShouldClose() && !exit.isactive ) {
 		ClearBackground(RAYWHITE);
 		BeginDrawing();
 
 		panv.doStuff();
+
+		//GuiSpinner(Rectangle{ 10,10,100,50 }, "Val", &vvv, -10, 20, true);
+		vvv = GuiScrollBar(Rectangle{ 10,10,10,100 }, vvv, -1, 10);
 		EndDrawing();
 	}
 	CloseWindow();
@@ -308,7 +333,6 @@ void WindowBox::packToUnits() {
 
 }
 
-
 void GroupBox::doStuff() {
 	int tmpsize = GuiGetStyle(DEFAULT, TEXT_SIZE);
 	GuiSetStyle(DEFAULT, TEXT_SIZE, txtSize);
@@ -320,6 +344,11 @@ void GroupBox::doStuff() {
 	GuiSetStyle(DEFAULT, TEXT_SIZE, tmpsize);
 
 	GUIContainer::doStuff();
+}
+
+void GroupBox::resize(float fac) {
+	GUIContainer::resize(fac);
+	txtSize *= fac;
 }
 
 void GroupBox::packToUnits() {
@@ -342,7 +371,6 @@ void GroupBox::packToUnits() {
 	
 }
 
-
 void Button::doStuff() {
 	int tmpsize = GuiGetStyle(DEFAULT, TEXT_SIZE);
 	GuiSetStyle(DEFAULT, TEXT_SIZE, txtSize);
@@ -360,6 +388,11 @@ void Button::packToUnits() {
 	GuiSetStyle(DEFAULT, TEXT_SIZE, tmpsize);
 }
 
+void Button::resize(float fac) {
+	GUIUnit::resize(fac);
+	txtSize *= fac;
+}
+
 void Panel::doStuff() {
 
 	GuiPanel(box);
@@ -373,6 +406,11 @@ void Toggle::packToUnits() {
 
 	box.height = txtSize;
 	GuiSetStyle(DEFAULT, TEXT_SIZE, tmpsize);
+}
+
+void Toggle::resize(float fac) {
+	GUIUnit::resize(fac);
+	txtSize *= fac;
 }
 
 void Toggle::doStuff() {
@@ -398,6 +436,11 @@ void Label::packToUnits() {
 
 	box.height = txtSize;
 	GuiSetStyle(DEFAULT, TEXT_SIZE, tmpsize);
+}
+
+void Label::resize(float fac) {
+	GUIUnit::resize(fac);
+	txtSize *= fac;
 }
 
 void TextBox::packToUnits() {
@@ -458,6 +501,11 @@ void TextBox::setStr(const char* str) {
 
 }
 
+void TextBox::resize(float fac) {
+	GUIUnit::resize(fac);
+	txtSize *= fac;
+}
+
 void Slider::doStuff() {
 	int tmpsize = GuiGetStyle(DEFAULT, TEXT_SIZE);
 	GuiSetStyle(DEFAULT, TEXT_SIZE, txtSize);
@@ -481,6 +529,15 @@ void Slider::packToUnits() {
 
 	box.height = txtSize;
 
+}
+
+void Slider::resize(float fac) {
+	GUIUnit::resize(fac);
+	txtSize *= fac;
+}
+
+void ScrollBar::doStuff() {
+	value = GuiScrollBar(box, value, minValue, maxValue);
 }
 
 void DropBox::doStuff() {
@@ -552,4 +609,9 @@ DropBox::~DropBox() {
 		delete[]buffer;
 	buffer = nullptr;
 
+}
+
+void DropBox::resize(float fac) {
+	GUIUnit::resize(fac);
+	txtSize *= fac;
 }
