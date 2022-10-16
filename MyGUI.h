@@ -80,6 +80,17 @@ public:
 
 };
 
+class LabelPair : public GUIUnit {
+public:
+
+	std::string msg1 = "Info";
+	std::string msg2 = "Detail";
+	int txtSize = 29;
+	void doStuff() override;
+	void packToUnits() override;
+	void resize(float fac) override;
+};
+
 class TextBox : public GUIUnit {
 
 public:

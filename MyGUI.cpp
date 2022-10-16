@@ -443,6 +443,27 @@ void Label::resize(float fac) {
 	txtSize *= fac;
 }
 
+void LabelPair::doStuff() {
+	int tmpsize = GuiGetStyle(DEFAULT, TEXT_SIZE);
+	GuiSetStyle(DEFAULT, TEXT_SIZE, txtSize);
+	GuiLabel(box, (msg1 + " " + msg2).c_str());
+	GuiSetStyle(DEFAULT, TEXT_SIZE, tmpsize);
+}
+
+void LabelPair::packToUnits() {
+	int tmpsize = GuiGetStyle(DEFAULT, TEXT_SIZE);
+	GuiSetStyle(DEFAULT, TEXT_SIZE, txtSize);
+	box.width = GetTextWidth((msg1 + " " + msg2).c_str()) + 2 * (GuiGetStyle(DEFAULT, TEXT_SPACING) + GuiGetStyle(DEFAULT, TEXT_PADDING) + GuiGetStyle(BUTTON, BORDER_WIDTH));
+
+	box.height = txtSize;
+	GuiSetStyle(DEFAULT, TEXT_SIZE, tmpsize);
+}
+
+void LabelPair::resize(float fac) {
+	GUIUnit::resize(fac);
+	txtSize *= fac;
+}
+
 void TextBox::packToUnits() {
 
 	int tmpsize = GuiGetStyle(DEFAULT, TEXT_SIZE);

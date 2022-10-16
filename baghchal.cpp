@@ -4,7 +4,7 @@
 #include <functional>
 
 int baghchal() {
-	int width = 1200;
+	int width = 1220;
 	int height = 900;
 
 	InitWindow(width, height, "Tiger Move");
@@ -14,82 +14,24 @@ int baghchal() {
 	Rectangle gamerec;
 	gamerec.x = 0;
 	gamerec.y = 0;
-	gamerec.width = width*0.8;
-	gamerec.height = height;
+	gamerec.width = ((width > height) ? height : width);
+	gamerec.height = ((width > height) ? height : width);
 
 	//Remaining rectangle
 	Rectangle guirec;
-	guirec.x = gamerec.x + gamerec.width;
+	guirec.x = gamerec.x;
 	guirec.y = gamerec.y;
-	guirec.width = width - guirec.x;
-	guirec.height = gamerec.height;
+	if (width > height) {
+		guirec.x += gamerec.width;
+		guirec.width = width - guirec.x;
+		guirec.height = gamerec.height;
+	}
+	else {
+		guirec.y += gamerec.width;
+		guirec.height = height - guirec.y;
+		guirec.width = gamerec.width;
+	}
 
-	//All required GUI elements are to be introduced here
-	//Introduction panel, ie startup panel
-	Panel intropan;
-	intropan.box = guirec;
-
-	//Human or ai selection
-	Label ply1;
-	ply1.msg = "Player 1";
-
-	DropBox play1by;
-	play1by.list.push_back("Human");
-	play1by.list.push_back("Computer");
-
-	Panel plygrp1;
-	plygrp1.units.push_back(&ply1);
-	plygrp1.units.push_back(&play1by);
-
-	Label ply2;
-	ply2.msg = "Player 2";
-
-	DropBox play2by = play1by;
-
-	Panel plygrp2;
-	plygrp2.units.push_back(&ply2);
-	plygrp2.units.push_back(&play2by);
-
-	GroupBox settgrp;
-	settgrp.title = "Setup";
-	settgrp.units.push_back(&plygrp1);
-	settgrp.units.push_back(&plygrp2);
-
-
-	Button playbut;
-	playbut.msg = "PLAY";
-
-	intropan.units.push_back(&playbut);
-	intropan.units.push_back(&settgrp);
-
-	auto resetStartUI = [&]() {
-
-		playbut.packToUnits();
-
-		ply1.packToUnits();
-		ply2.packToUnits();
-
-		play1by.justchanged = true;
-		play2by.justchanged = true;
-		play1by.packToUnits();
-		play2by.packToUnits();
-
-		plygrp1.stackChildren(true);
-		plygrp2.stackChildren(true);
-
-		plygrp1.packToUnits();
-		plygrp2.packToUnits();
-
-		settgrp.stackChildren(false);
-		settgrp.packToUnits();
-
-
-		intropan.stackChildren(true);
-		
-	};
-
-	//Do all intial resizing stuff of gui
-	resetStartUI();
 
 	//coordinate to vertex number fxn
 	//let's number it this way for now :
@@ -466,7 +408,9 @@ gtggt";
 
 	//board filler helper function , maybe in future initializes game too
 	auto fillboard = [](std::string input,GameUnit &game) {
-		
+		game.ngoats = 0;
+		game.neaten = 0;
+		game.state = PLAY;
 		for (int i = 0; i < 25; ++i) {
 			switch (input[i]) {
 			case 't':
@@ -487,6 +431,160 @@ gtggt";
 
 	fillboard(defaultboard,main_game);
 	//fillboard(trialboard,main_game);
+
+		//All required GUI elements are to be introduced here
+	//Introduction panel, ie startup panel
+	Panel intropan;
+	intropan.box = guirec;
+
+	//Human or ai selection
+	Label ply1;
+	ply1.msg = "Player 1";
+
+	DropBox play1by;
+	play1by.list.push_back("Human");
+	play1by.list.push_back("Computer");
+
+	Panel plygrp1;
+	plygrp1.units.push_back(&ply1);
+	plygrp1.units.push_back(&play1by);
+
+	Label ply2;
+	ply2.msg = "Player 2";
+
+	DropBox play2by = play1by;
+
+	Panel plygrp2;
+	plygrp2.units.push_back(&ply2);
+	plygrp2.units.push_back(&play2by);
+
+	GroupBox settgrp;
+	settgrp.title = "Setup";
+	settgrp.units.push_back(&plygrp1);
+	settgrp.units.push_back(&plygrp2);
+
+
+	Button playbut;
+	playbut.msg = "PLAY";
+
+	//Couple empty labels for accomodating drop boxes
+	Label empt1, empt2;
+	empt1.msg = "\t";
+	empt2 = empt1;
+
+	Button exitbut;
+	exitbut.msg = "EXIT";
+
+
+	intropan.units.push_back(&playbut);
+	intropan.units.push_back(&settgrp);
+	intropan.units.push_back(&empt1);
+	intropan.units.push_back(&empt2);
+	intropan.units.push_back(&exitbut);
+
+	auto resetStartUI = [&]() {
+
+		playbut.packToUnits();
+
+		ply1.packToUnits();
+		ply2.packToUnits();
+
+		play1by.justchanged = true;
+		play2by.justchanged = true;
+		play1by.packToUnits();
+		play2by.packToUnits();
+
+		plygrp1.stackChildren(true);
+		plygrp2.stackChildren(true);
+
+		plygrp1.packToUnits();
+		plygrp2.packToUnits();
+
+		empt1.packToUnits();
+		empt2.packToUnits();
+		exitbut.packToUnits();
+
+		settgrp.stackChildren(false);
+		settgrp.packToUnits();
+
+
+		intropan.stackChildren(true);
+
+	};
+
+	//Stuff shown during game ,ie stats
+	Panel gamepanel;
+	gamepanel.box = guirec;
+
+	LabelPair gputinfo;
+	gputinfo.msg1 = "Goats Put ";
+	gputinfo.msg2 = "20";
+
+	LabelPair geatinfo;
+	geatinfo.msg1 = "Goates Eaten ";
+	geatinfo.msg2 = "0";
+
+	LabelPair statinfo;
+	statinfo.msg1 = "Status : ";
+	statinfo.msg2 = "Game Running";
+
+	Button resetbut;
+	resetbut.msg = "Restart Game";
+
+	gamepanel.units.push_back(&statinfo);
+	gamepanel.units.push_back(&gputinfo);
+	gamepanel.units.push_back(&geatinfo);
+	gamepanel.units.push_back(&resetbut);
+
+	auto resetInfoUI = [&]() {
+		std::string tmp = statinfo.msg2;
+		statinfo.msg2 = "Restart Game";
+		statinfo.packToUnits();
+		statinfo.msg2 = tmp;
+
+		tmp = gputinfo.msg2;
+		gputinfo.msg2 = "MM";
+		gputinfo.packToUnits();
+		gputinfo.msg2 = tmp;
+
+		tmp = geatinfo.msg2;
+		geatinfo.msg2 = "MM";
+		geatinfo.packToUnits();
+		geatinfo.msg2 = tmp;
+
+		resetbut.packToUnits();
+
+		if (statinfo.box.width < gamepanel.box.width)
+			statinfo.box.width = gamepanel.box.width;
+
+		gamepanel.stackChildren();
+
+	};
+
+	auto updateInfoUI = [&]() {
+
+		gputinfo.msg2 = std::to_string(main_game.ngoats);
+		geatinfo.msg2 = std::to_string(main_game.neaten);
+		switch (main_game.state) {
+		case PLAY:
+			statinfo.msg2 = "Game Running";
+			break;
+		case DRAW:
+			statinfo.msg2 = "Game Draw";
+			break;
+		case T_WIN:
+			statinfo.msg2 = "Tigers Win";
+			break;
+		case G_WIN:
+			statinfo.msg2 = "Goats Win";
+			break;
+		}
+
+	};
+
+	//Do all intial resizing stuff of gui
+	resetStartUI();
+	resetInfoUI();
 
 	//load tiger and goat images
 	Image tiger= LoadImage("tiger.png");
@@ -657,7 +755,7 @@ gtggt";
 	double aiwait = 0.7;
 
 
-	while (!WindowShouldClose()) {
+	while (!WindowShouldClose() && !exitbut.isactive) {
 
 		//Stuff for when game has not started
 		if (!isgamestart) {
@@ -675,87 +773,96 @@ gtggt";
 		}
 		//Stuff for when game has started
 		else {
-			if (main_game.state == PLAY) {
-				//if still playing , update game
-				updateGame(main_game, istiger);
 
-				//First check if ai is to be used
-				if ((istiger && istigerai) || (!istiger && isgoatai)) {
+			if (resetbut.isactive) {
+				//Restart Game
+				isgamestart = false;
+				fillboard(defaultboard,main_game);
+				istiger = false;
+				isselect = false;
+			}
+			else {
+				if (main_game.state == PLAY) {
+					//if still playing , update game
+					updateGame(main_game, istiger);
+					updateInfoUI();
 
-					//If both ai are enabled , skip this part
-					if (!istigerai || !isgoatai || (GetTime() > (aitimer + aiwait))) {
-						aitimer = GetTime();
+					//First check if ai is to be used
+					if ((istiger && istigerai) || (!istiger && isgoatai)) {
 
-						AI1 ai;
-						ai.base = main_game;
-						ai.isaitiger = istiger;
-						ai.isoptgoat = !istiger;
-						ai.level = 4;
-						if (main_game.ngoats >= 20)
-							ai.level += 2;
-						ai.move = std::pair<int, int>(-1, -1);
-						ai.moves.clear();
+						//If both ai are enabled, then wait for timer else just run damn ai
+						if (!istigerai || !isgoatai || (GetTime() > (aitimer + aiwait))) {
+							aitimer = GetTime();
 
-						std::pair<int, int> result = runai1(ai);
+							AI1 ai;
+							ai.base = main_game;
+							ai.isaitiger = istiger;
+							ai.isoptgoat = !istiger;
+							ai.level = 4;
+							if (main_game.ngoats >= 20)
+								ai.level += 2;
+							ai.move = std::pair<int, int>(-1, -1);
+							ai.moves.clear();
 
-						if (trymove(result.first, result.second, main_game)) {
-							istiger = !istiger;
+							std::pair<int, int> result = runai1(ai);
+
+							if (trymove(result.first, result.second, main_game)) {
+								istiger = !istiger;
+
+							}
 						}
+
 					}
+					else {
 
-				}
-				else {
+						//Filter mouse click event if ai is not to be used
+						if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+							//store mouse clicked position 
+							Vector2 mpos = GetMousePosition();
 
-					//Filter mouse click event if ai is not to be used
-					if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-						//store mouse clicked position 
-						Vector2 mpos = GetMousePosition();
+							//compare mouse positon against game rectangle
+							if (CheckCollisionPointRec(mpos, gamerec)) {
 
-						//compare mouse positon against game rectangle
-						if (CheckCollisionPointRec(mpos, gamerec)) {
+								int boxn = coortobox(mpos.x, mpos.y);
 
-							int boxn = coortobox(mpos.x, mpos.y);
+								//If a box is indeed chosen
+								if (boxn >= 0) {
 
-							//If a box is indeed chosen
-							if (boxn >= 0) {
+									//If not selected already check if valid box is chosen and select or if goat to put , put
+									if (!isselect) {
 
-								//If not selected already check if valid box is chosen and select or if goat to put , put
-								if (!isselect) {
+										//if goat can be put and is goat's turn then do that
+										if (!istiger && putgoat(boxn, main_game)) {
+											istiger = !istiger;
+										}
+										//If selected on tiger on tiger turn and ... select
+										else if (((main_game.board.at(boxn) == GOAT) != istiger) && ((main_game.board.at(boxn) == TIGER) == istiger)) {
+											selectboxn = boxn;
+											isselect = true;
+										}
 
-									//if goat can be put and is goat's turn then do that
-									if (!istiger && putgoat(boxn, main_game)) {
-										istiger = !istiger;
-									}
-									//If selected on tiger on tiger turn and ... select
-									else if (((main_game.board.at(boxn) == GOAT) != istiger) && ((main_game.board.at(boxn) == TIGER) == istiger)) {
-										selectboxn = boxn;
-										isselect = true;
-									}
-
-								}
-								else {
-									//If can move , then move else reset selection
-									if (trymove(selectboxn, boxn, main_game)) {
-										isselect = false;
-										istiger = !istiger;
 									}
 									else {
-										isselect = false;
+										//If can move , then move else reset selection
+										if (trymove(selectboxn, boxn, main_game)) {
+											isselect = false;
+											istiger = !istiger;
+										}
+										else {
+											isselect = false;
+										}
 									}
 								}
+
+
 							}
 
-
 						}
-
 					}
 				}
-			}
 
-			else {
-
-
-
+				else {
+				}
 			}
 		}
 		ClearBackground(BLACK);
@@ -863,6 +970,8 @@ gtggt";
 		//If start page then do that
 		if (!isgamestart)
 			intropan.doStuff();
+		else
+			gamepanel.doStuff();
 
 		EndDrawing();
 
