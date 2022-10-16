@@ -617,6 +617,10 @@ gtggt";
 	Image tiger= LoadImage("tiger.png");
 	Image goat = LoadImage("goat.png");
 
+	//Create textures for original images
+	Texture2D origtiger = LoadTextureFromImage(tiger);
+	Texture2D origgoat = LoadTextureFromImage(goat);
+
 	//Sample box
 	Rectangle samplerec = downrec(boxtorec(0));
 
@@ -671,30 +675,6 @@ gtggt";
 			//letting weight = no of goat not eaten
 			ai.wt = (5 - ai.base.neaten)/5.0;
 
-			//Let's add one more form of wt measurement
-			//For each group in transitions if there is both tiger and goat together 
-			//Add ratio of empty places to total places in the group
-
-
-			//for (auto& tran : transitions) {
-			//
-			//	float ng = 0;
-			//	float nt = 0;
-			//	for (auto& tn : tran) {
-			//		switch (ai.base.board.at(tn)) {
-			//		case TIGER:
-			//			nt += 1;
-			//			break;
-			//		case GOAT:
-			//			ng += 1;
-			//			break;
-			//		}
-			//	}
-			//	if (ng > 0 && nt > 0) {
-			//		ai.wt -= ( ng - nt) / tran.size();
-			//	}
-			//
-			//}
 			//If won/lost then set wt accordingly
 			if (ai.base.state == T_WIN)
 				ai.wt = -INFINITY;
@@ -787,6 +767,13 @@ gtggt";
 
 			resetStartUI();
 
+			//First set images to original images
+			UnloadImage(tiger);
+			UnloadImage(goat);
+
+			tiger = LoadImageFromTexture(origtiger);
+			goat = LoadImageFromTexture(origgoat);
+
 			//Sample box
 			Rectangle samplerec = downrec(boxtorec(0));
 
@@ -794,9 +781,12 @@ gtggt";
 			ImageResize(&tiger, samplerec.width, samplerec.height);
 			ImageResize(&goat, samplerec.width, samplerec.height);
 
+			UnloadTexture(tigertex);
+			UnloadTexture(goattex);
+
 			//Image textures size 
-			Texture2D tigertex = LoadTextureFromImage(tiger);
-			Texture2D goattex = LoadTextureFromImage(goat);
+			tigertex = LoadTextureFromImage(tiger);
+			goattex = LoadTextureFromImage(goat);
 
 
 		}
