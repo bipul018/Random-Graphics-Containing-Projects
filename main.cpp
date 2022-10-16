@@ -3,7 +3,6 @@
 #include <iostream>
 #include "MyGUI.h"
 int sudoku();
-int emfield();
 int chess();
 
 int coaster();
@@ -25,15 +24,13 @@ struct MyColor {
 
 int main() {
 
-	std::cout << "Enter e for em simulation and s for sudoku :  c for chess:\n h for coaster: b for baghchal:\ng : guitest";
+	std::cout << "Enter  s for sudoku :  c for chess:\n h for coaster: b for baghchal:\ng : guitest";
 	char c = 'x';
 	std::cin >> c;
 	
 	//FreeConsole();
 
 	switch (c) {
-	case 'e':
-		return emfield();
 	case 's':
 		return sudoku();
 	case 'c':

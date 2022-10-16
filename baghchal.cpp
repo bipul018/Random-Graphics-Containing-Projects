@@ -8,30 +8,40 @@ int baghchal() {
 	int height = 900;
 
 	InitWindow(width, height, "Tiger Move");
+	SetWindowState(FLAG_WINDOW_RESIZABLE);
 	SetTargetFPS(90);
 
 	//Rectangle for game
 	Rectangle gamerec;
-	gamerec.x = 0;
-	gamerec.y = 0;
-	gamerec.width = ((width > height) ? height : width);
-	gamerec.height = ((width > height) ? height : width);
-
 	//Remaining rectangle
 	Rectangle guirec;
-	guirec.x = gamerec.x;
-	guirec.y = gamerec.y;
-	if (width > height) {
-		guirec.x += gamerec.width;
-		guirec.width = width - guirec.x;
-		guirec.height = gamerec.height;
-	}
-	else {
-		guirec.y += gamerec.width;
-		guirec.height = height - guirec.y;
-		guirec.width = gamerec.width;
-	}
 
+	auto setuprecs = [&]() {
+
+		width = GetScreenWidth();
+		height = GetScreenHeight();
+
+		gamerec.x = 0;
+		gamerec.y = 0;
+		gamerec.width = ((width > height) ? height : width);
+		gamerec.height = ((width > height) ? height : width);
+
+
+		guirec.x = gamerec.x;
+		guirec.y = gamerec.y;
+		if (width > height) {
+			guirec.x += gamerec.width;
+			guirec.width = width - guirec.x;
+			guirec.height = gamerec.height;
+		}
+		else {
+			guirec.y += gamerec.width;
+			guirec.height = height - guirec.y;
+			guirec.width = gamerec.width;
+		}
+	};
+
+	setuprecs();
 
 	//coordinate to vertex number fxn
 	//let's number it this way for now :
@@ -484,18 +494,32 @@ gtggt";
 
 	auto resetStartUI = [&]() {
 
+		intropan.box = guirec;
+
+		bool hori = (width > height);
+		hori = true;
+
 		playbut.packToUnits();
 
 		ply1.packToUnits();
 		ply2.packToUnits();
+		if (ply1.box.width < intropan.box.width/2)
+			ply1.box.width = intropan.box.width/2;
+
+
+		if (ply2.box.width < intropan.box.width/2)
+			ply2.box.width = intropan.box.width/2;
+
+
+
 
 		play1by.justchanged = true;
 		play2by.justchanged = true;
 		play1by.packToUnits();
 		play2by.packToUnits();
 
-		plygrp1.stackChildren(true);
-		plygrp2.stackChildren(true);
+		plygrp1.stackChildren(hori);
+		plygrp2.stackChildren(hori);
 
 		plygrp1.packToUnits();
 		plygrp2.packToUnits();
@@ -504,11 +528,10 @@ gtggt";
 		empt2.packToUnits();
 		exitbut.packToUnits();
 
-		settgrp.stackChildren(false);
+		settgrp.stackChildren((!hori));
 		settgrp.packToUnits();
 
-
-		intropan.stackChildren(true);
+		intropan.stackChildren(hori);
 
 	};
 
@@ -537,6 +560,10 @@ gtggt";
 	gamepanel.units.push_back(&resetbut);
 
 	auto resetInfoUI = [&]() {
+		gamepanel.box = guirec;
+		bool hori = (width > height);
+		hori = true;
+
 		std::string tmp = statinfo.msg2;
 		statinfo.msg2 = "Restart Game";
 		statinfo.packToUnits();
@@ -557,7 +584,7 @@ gtggt";
 		if (statinfo.box.width < gamepanel.box.width)
 			statinfo.box.width = gamepanel.box.width;
 
-		gamepanel.stackChildren();
+		gamepanel.stackChildren(hori);
 
 	};
 
@@ -731,12 +758,6 @@ gtggt";
 			}
 		}
 
-		//Debug breakpoint helper
-		if (ai.move.first == -1) {
-			int in = 9;
-			in = 9 + in * in;
-		}
-		
 
 		//Choose one randomly from optimal moves
 		if (optmoves.empty())
@@ -756,6 +777,29 @@ gtggt";
 
 
 	while (!WindowShouldClose() && !exitbut.isactive) {
+
+		//If window has been resized
+		if (IsWindowResized()) {
+
+			setuprecs();
+
+			resetInfoUI();
+
+			resetStartUI();
+
+			//Sample box
+			Rectangle samplerec = downrec(boxtorec(0));
+
+			//resizing image to sample rectangle
+			ImageResize(&tiger, samplerec.width, samplerec.height);
+			ImageResize(&goat, samplerec.width, samplerec.height);
+
+			//Image textures size 
+			Texture2D tigertex = LoadTextureFromImage(tiger);
+			Texture2D goattex = LoadTextureFromImage(goat);
+
+
+		}
 
 		//Stuff for when game has not started
 		if (!isgamestart) {
