@@ -804,7 +804,7 @@ public:
 };
 int AIeval::totalevals = 0;
 
-int chess() {
+int main() {
 
 	Board masterBoard;
 	DrawCell cellpaint(900);

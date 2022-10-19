@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <functional>
 
-int baghchal() {
+int main() {
 	int width = 1220;
 	int height = 900;
 

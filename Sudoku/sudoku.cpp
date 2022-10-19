@@ -5,7 +5,7 @@
 #include <vector>
 #include <functional>
 
-int sudoku() {
+int main() {
 
 	InitWindow(1200, 900, "Sudoku");
 	SetTargetFPS(60);
