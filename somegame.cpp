@@ -42,7 +42,10 @@ int coaster() {
 			vecs[i].x = i;
 			vecs[i].y = 0;
 			for (int j = 1; j <= sizeof(amps) / sizeof(amps[0]); ++j) {
-				vecs[i].y += amps[j - 1] * cos(offset + i * j * PI / (2.0 * width))  / sumamp;
+
+				if ((20 * (i)) / width >= j-1)
+
+					vecs[i].y += amps[j - 1] * cos(offset + i * j * PI / (2.0 * width)) / sumamp;
 			}
 		}
 		for (int i = 0; i < width; ++i)

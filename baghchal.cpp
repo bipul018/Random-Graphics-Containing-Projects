@@ -1,6 +1,7 @@
 #include <raylib-cpp.hpp>
 #include "MyGUI.h"
 #include <array>
+#include <unordered_set>
 #include <functional>
 
 int baghchal() {
@@ -121,18 +122,22 @@ int baghchal() {
 	};
 
 	//game informations 
-	using Board = std::array<char, 25>;
-
+	//using Board = std::array<char, 25>;
+	using Board = std::string;
 	//A struct that entirely describes a game
 	struct GameUnit {
 		Board board;
 		unsigned ngoats = 0;
 		unsigned neaten = 0;
-
+		GameUnit() {
+			board.resize(26);
+		}
 		//game final state
 		GameState state = PLAY;
 	} main_game;
 
+	//Now for a history of games
+	
 	//additional game informations
 	//Variable to store selected box
 	int selectboxn = -1;
@@ -193,7 +198,14 @@ int baghchal() {
 	//If from location and to location are equal it implies trying to put a goat
 	//Only works if game is not over 
 	//All invalid cases return false
-	auto checkmove = [&transitions](const GameUnit &game, int tran_no, int fromloc, int toloc,int & empty) {
+	auto checkmove = [&transitions,&main_game](const GameUnit &game, int tran_no, int fromloc, int toloc,int & empty) {
+
+		//Set history to main_history if game is main_game and ptr is null
+		//if (hist == nullptr) {
+		//	if (&game == &main_game) {
+		//		hist = &main_history;
+		//	}
+		//}
 
 		if (game.state != PLAY)
 			return false;
@@ -227,7 +239,21 @@ int baghchal() {
 			//If consecutive then just move
 			if (abs(fromloc - toloc) == 1) {
 				empty = -1;
-				return true;
+				//if ((game.ngoats < 20) || (hist == nullptr))
+					return true;
+
+				//TODO:: add case for checking history of game and disallow move if already occured
+				//TODO:: work on removing this const casting
+				Board& tmpbrd = *reinterpret_cast<Board*>(&const_cast<GameUnit*>(&game)->board);
+				auto atto = tmpbrd.at(to);
+				tmpbrd.at(to) = tmpbrd.at(from);
+				tmpbrd.at(from) = NONE;
+
+				//int c = hist->count(tmpbrd);
+
+				tmpbrd.at(from) = tmpbrd.at(to);
+				tmpbrd.at(to) = atto;
+				//return c == 0;
 			}
 
 			//else if from is tiger, from and to are 2 units apart and there is a goat in between
@@ -407,14 +433,14 @@ t---t\
 -----\
 -----\
 -----\
-t---t";
+t---t0";
 	const char trialboard[] =
 		"\
+g-ggg\
 ggggg\
-ggggg\
-ggggg\
-gt-tg\
-gtggt";
+-gggg\
+tt-gg\
+-tt-g3";
 
 	//board filler helper function , maybe in future initializes game too
 	auto fillboard = [](std::string input,GameUnit &game) {
@@ -437,10 +463,12 @@ gtggt";
 				return;
 			}
 		}
+		game.neaten = input[25] - '0';
+		game.ngoats += game.neaten;
 	};
 
 	fillboard(defaultboard,main_game);
-	//fillboard(trialboard,main_game);
+	fillboard(trialboard,main_game);
 
 		//All required GUI elements are to be introduced here
 	//Introduction panel, ie startup panel
@@ -753,7 +781,7 @@ gtggt";
 	//A time delay for when both ai are enabled so as to be able to view the results
 	double aitimer = GetTime();
 	//The delay amount in seconds
-	double aiwait = 0.7;
+	double aiwait = 0.4;
 
 
 	while (!WindowShouldClose() && !exitbut.isactive) {
@@ -814,12 +842,16 @@ gtggt";
 				fillboard(defaultboard,main_game);
 				istiger = false;
 				isselect = false;
+				//main_history.clear();
+				//main_history.reserve(32);
 			}
 			else {
 				if (main_game.state == PLAY) {
 					//if still playing , update game
 					updateGame(main_game, istiger);
 					updateInfoUI();
+					if ((main_game.state == PLAY) && (main_game.ngoats >= 20));
+					//	main_history.insert(main_game.board);
 
 					//First check if ai is to be used
 					if ((istiger && istigerai) || (!istiger && isgoatai)) {
@@ -834,7 +866,7 @@ gtggt";
 							ai.isoptgoat = !istiger;
 							ai.level = 4;
 							if (main_game.ngoats >= 20)
-								ai.level += 2;
+								ai.level += 0;
 							ai.move = std::pair<int, int>(-1, -1);
 							ai.moves.clear();
 
