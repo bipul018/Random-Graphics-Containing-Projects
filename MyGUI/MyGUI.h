@@ -1,5 +1,8 @@
 #pragma once
 #include "raylib-cpp.hpp"
+#ifdef ADD_GUI_IMPL
+#include <extras\raygui.h>
+#endif
 
 //A function that does or/union of rectangles , that results a rectangles including both 
 raylib::Rectangle operator | (raylib::Rectangle r1, raylib::Rectangle r2);
@@ -139,9 +142,9 @@ public:
 
 class ScrollBar : public GUIUnit {
 public:
-	int value;
-	int minValue;
-	int maxValue;
+	int value = 0;
+	int minValue = 0;
+	int maxValue = 99;
 	void doStuff() override;
 };
 
